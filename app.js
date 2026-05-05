@@ -46,17 +46,49 @@ const GAME_CONFIG = {
   SPIN_COST:        5,
   STARTING_CREDITS: 100,
   GRID_SIZE:        5,
-  SPIN_DURATION_MS: 2200,
-  TICK_MS:          90,
+  SPIN_DURATION_MS: 4200,
+  TICK_MS:          60,
 };
 
+// ═══════════════════════════════════════════════════
+// FRUITS CONFIG (Weights for spinning probability)
+// ═══════════════════════════════════════════════════
 const FRUITS = [
-  { emoji: "🍒", value: 1   },
-  { emoji: "🥭", value: 3   },
-  { emoji: "🍎", value: 5   },
-  { emoji: "🍍", value: 10  },
-  { emoji: "🍫", value: 100 },
+  { emoji: "🍒", value: 1,   weight: 45, label: "cherry" },
+  { emoji: "🍍", value: 10,  weight: 12, label: "pineapple" },
+  { emoji: "🥭", value: 3,   weight: 18, label: "mango" },
+  { emoji: "🍎", value: 5,   weight: 15, label: "apple" },
+  { emoji: "🍫", value: 100, weight: 3,  label: "bar" },
+  { emoji: "💣", value: 0,   weight: 7,  label: "bomb" },
 ];
+
+const TOTAL_WEIGHT = FRUITS.reduce((sum, f) => sum + f.weight, 0);
+
+// ═══════════════════════════════════════════════════
+// EXACT BORDER LAYOUT — Matching your image
+// ═══════════════════════════════════════════════════
+
+const FIXED_LAYOUT = {
+  0:"🍒",1:"🍍",2:"💣",3:"🍎",4:"🍒",
+  5:"🍎",9:"🍍",
+  10:"🍒",14:"🍒",
+  15:"💣",19:"💣",
+  20:"🍒",21:"🥭",22:"🍫",23:"🥭",24:"🍒"
+};
+
+// ═══════════════════════════════════════════════════
+// UTILITY HELPERS (Added: May 5)
+// ═══════════════════════════════════════════════════
+
+const getWeightedFruit = () => {
+  let random = Math.random() * TOTAL_WEIGHT;
+  
+  for (const fruit of FRUITS) {
+    random -= fruit.weight;
+    if (random <= 0) return fruit;
+  }
+  return FRUITS[FRUITS.length - 1]; // fallback
+};
 
 // ═══════════════════════════════════════════════════
 // FIREBASE INIT
@@ -194,13 +226,20 @@ const Router = {
 };
 
 // ═══════════════════════════════════════════════════
-// GRID MODULE
+// GRID MODULE (Updated as of May 5, 2026)
+// (Updated with exact layout)
 // ═══════════════════════════════════════════════════
 
 const GridModule = (() => {
-  const borderIdx   = GridUtils.borderIndices();
+  const borderIdx = GridUtils.borderIndices();
   const fruitLayout = {};
-  borderIdx.forEach((idx, i) => { fruitLayout[idx] = FRUITS[i % FRUITS.length]; });
+
+  borderIdx.forEach(idx => {
+    const emoji = FIXED_LAYOUT[idx];
+    fruitLayout[idx] = FRUITS.find(f => f.emoji === emoji);
+  });
+
+  console.log(GridUtils.borderIndices())
 
   let cells = [];
 
@@ -210,23 +249,36 @@ const GridModule = (() => {
     cells = [];
 
     for (let i = 0; i < GridUtils.TOTAL; i++) {
-      const el       = document.createElement("div");
+      const el = document.createElement("div");
       const isBorder = GridUtils.isBorder(i);
-      el.className   = isBorder ? "cell fruit" : "cell inner";
-      el.textContent = isBorder ? fruitLayout[i].emoji : "X";
-      if (isBorder) el.dataset.index = i;
+      
+      el.className = isBorder ? "cell fruit" : "cell inner";
+      
+      if (isBorder) {
+        const fruit = fruitLayout[i];
+        el.textContent = fruit.emoji;
+        el.dataset.index = i;
+
+        if (fruit.emoji === "💣") el.classList.add("bomb");
+        if (fruit.emoji === "🍫") el.classList.add("jackpot");
+      } else {
+        el.textContent = "X";
+      }
+      
       grid.appendChild(el);
       cells.push(el);
     }
   };
 
-  const clearHighlights  = () => borderIdx.forEach((i) => cls.remove(cells[i], "lit", "winner"));
-  const setLit           = (idx) => { clearHighlights(); cls.add(cells[idx], "lit");    };
-  const setWinner        = (idx) => { clearHighlights(); cls.add(cells[idx], "winner"); };
-  const getFruitAt       = (idx) => fruitLayout[idx];
-  const getBorderIndices = ()    => borderIdx;
+  const clearHighlights = () => borderIdx.forEach(i => 
+    cls.remove(cells[i], "lit", "winner")
+  );
 
-  return { render, clearHighlights, setLit, setWinner, getFruitAt, getBorderIndices };
+  const setLit    = (idx) => { clearHighlights(); cls.add(cells[idx], "lit"); };
+  const setWinner = (idx) => { clearHighlights(); cls.add(cells[idx], "winner"); };
+  const getFruitAt = (idx) => fruitLayout[idx];
+
+  return { render, clearHighlights, setLit, setWinner, getFruitAt, getBorderIndices: () => borderIdx };
 })();
 
 // ═══════════════════════════════════════════════════
@@ -302,30 +354,107 @@ const CreditsModule = (() => {
 })();
 
 // ═══════════════════════════════════════════════════
-// SPIN MODULE
+// SOUND MODULE (lightweight tick + win + bomb)
+// ═══════════════════════════════════════════════════
+
+const Sound = (() => {
+  let ctx;
+
+  const getCtx = () => {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return ctx;
+  };
+
+  const playTone = (freq = 800, duration = 0.05, type = "square", volume = 0.05) => {
+    const audioCtx = getCtx();
+
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = type;
+    osc.frequency.value = freq;
+
+    gain.gain.value = volume;
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+
+    // quick fade out (prevents click noise)
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+
+    osc.stop(audioCtx.currentTime + duration);
+  };
+
+  return {
+    tick: () => playTone(900, 0.03),       // spinning tick
+    win:  () => playTone(1200, 0.15),      // win sound
+    bomb: () => playTone(120, 0.25, "sawtooth", 0.08) // bomb sound
+  };
+})();
+
+// ═══════════════════════════════════════════════════
+// SPIN MODULE (Updated as of May 5, 2026)
 // ═══════════════════════════════════════════════════
 
 const SpinModule = (() => {
-  const spinBtn     = ()  => $("btn-spin");
-  const setSpinning = (v) => { State.isSpinning = v; spinBtn().disabled = v; };
+  const spinBtn = () => $("btn-spin");
 
-  const showResult = ({ emoji, value }) => {
-    $("result-text").textContent = `You got ${emoji} = ${formatCurrency(value)}`;
+  const setSpinning = (v) => {
+    State.isSpinning = v;
+    spinBtn().disabled = v;
+  };
+
+  const showResult = (fruit) => {
+    const resultEl = $("result-text");
+    
+    if (fruit.emoji === "💣") {
+      resultEl.textContent = `💥 BOOM! Fruit Bomb! You got nothing.`;
+      resultEl.style.color = "#ff4444";
+    } else {
+      resultEl.textContent = `You got ${fruit.emoji} = ${formatCurrency(fruit.value)}`;
+      resultEl.style.color = "";
+    }
+    
     showEl($("result-display"));
   };
 
-  const animate = async (borders) => {
-    const ticks     = Math.floor(GAME_CONFIG.SPIN_DURATION_MS / GAME_CONFIG.TICK_MS);
-    const winnerIdx = borders[Math.floor(Math.random() * borders.length)];
+const animate = async (borders) => {
+  const ticks = Math.floor(GAME_CONFIG.SPIN_DURATION_MS / GAME_CONFIG.TICK_MS);
 
-    for (let t = 0; t < ticks; t++) {
-      GridModule.setLit(borders[t % borders.length]);
-      await sleep(GAME_CONFIG.TICK_MS);
-    }
+  const winningFruit = getWeightedFruit();
 
-    GridModule.setWinner(winnerIdx);
-    return GridModule.getFruitAt(winnerIdx);
-  };
+  let winnerIdx = borders.find(idx => 
+    GridModule.getFruitAt(idx).emoji === winningFruit.emoji
+  );
+
+  if (winnerIdx === undefined) {
+    winnerIdx = borders[Math.floor(Math.random() * borders.length)];
+  }
+
+  for (let t = 0; t < ticks; t++) {
+    const idx = borders[t % borders.length];
+
+    GridModule.setLit(idx);
+
+    // 🔊 PLAY TICK SOUND
+    Sound.tick();
+
+    await sleep(GAME_CONFIG.TICK_MS);
+  }
+
+  GridModule.setWinner(winnerIdx);
+
+  // 🔊 FINAL SOUND
+  if (winningFruit.emoji === "💣") {
+    Sound.bomb();
+  } else {
+    Sound.win();
+  }
+
+  return winningFruit;
+};
 
   const spin = async () => {
     if (State.isSpinning) return;
@@ -342,11 +471,23 @@ const SpinModule = (() => {
     hideEl($("result-display"));
 
     const fruit = await animate(GridModule.getBorderIndices());
+    
     showResult(fruit);
-    await CreditsModule.add(fruit.value);
+    
+    if (fruit.value > 0) {
+      await CreditsModule.add(fruit.value);
+    } else if (fruit.emoji === "💣") {
+      // Optional: small penalty for bomb?
+      // await CreditsModule.deduct(2); // example
+    }
 
     DB.logHistory(State.user.uid, fruit.emoji, fruit.value).catch(() => {});
-    HistoryModule.prepend({ result: fruit.emoji, reward: fruit.value, createdAt: null });
+    
+    HistoryModule.prepend({ 
+      result: fruit.emoji, 
+      reward: fruit.value, 
+      createdAt: null 
+    });
 
     setSpinning(false);
   };
