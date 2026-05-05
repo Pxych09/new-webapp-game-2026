@@ -586,6 +586,11 @@ html, body {
   0%, 100% { color: var(--accent); }
   50%       { color: var(--accent2); transform: scale(1.2); }
 }
+.cell.fruit.bomb {
+  animation: shake 0.4s;
+  color: #ff4444;
+}
+
 
 /* ── RESPONSIVE ───────────────────────────────────── */
 @media (max-width: 520px) {
