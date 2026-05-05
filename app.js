@@ -352,58 +352,61 @@ const CreditsModule = (() => {
 })();
 
 // ═══════════════════════════════════════════════════
-// DAILY REWARD MODULE (Fixed May 5, 2026)
+// DAILY REWARD MODULE (Updated May 5, 2026)
 //
 // Rules:
-//  • Every full 24-hr window since last claim = +100 credits
-//  • If never claimed, the account creation counts as time 0
-//    (we fall back to a very old date so first-timers always get 100)
-//  • Claiming stores `now` as lastClaimAt — countdown resets to 24h
-//  • After claim: button is hidden, live countdown shown instead
-//  • Countdown ticks every second; when it hits 0 the claim UI reappears
+//  • lastClaimAt === null  → first-timer or never claimed → show 100 to claim
+//  • lastClaimAt set       → every full 24-hr window elapsed = +100 credits
+//  • Claiming saves `now` as lastClaimAt; countdown runs from that moment
+//  • After claim: Claim button replaced by live HH:MM:SS countdown
+//  • Countdown hits 0 → claimable UI reappears automatically
 // ═══════════════════════════════════════════════════
 
 const DailyReward = (() => {
   const REWARD_PER_DAY = 100;
   const MS_PER_DAY     = 24 * 60 * 60 * 1000;
 
-  let _countdownInterval = null; // holds setInterval id for cleanup
+  let _countdownInterval = null;
 
   // ── Helpers ────────────────────────────────────────
 
-  /** Returns the last-claim Date, or epoch 0 if never claimed. */
+  /**
+   * Returns the last-claim Date, or null if never claimed.
+   * null is handled explicitly — we never fall back to epoch.
+   */
   const getLastClaim = () => {
     const raw = State.userData.lastClaimAt;
-    if (!raw) return new Date(0);                  // never claimed → treat as very old
-    if (raw.toDate) return raw.toDate();            // Firestore Timestamp
+    if (!raw) return null;                  // never claimed
+    if (raw.toDate) return raw.toDate();    // Firestore Timestamp
     if (raw instanceof Date) return raw;
     return new Date(raw);
   };
 
   /**
-   * How many full 24-hr periods have elapsed since lastClaimAt?
-   * e.g. 3 days unclaimed → 300 credits available.
+   * How many credits are currently claimable.
+   *  - null lastClaimAt (first-timer or never claimed) → always 100
+   *  - otherwise: fullDays × 100
    */
   const getAvailableReward = () => {
-    const last      = getLastClaim();
+    const last = getLastClaim();
+    if (!last) return REWARD_PER_DAY;                        // free first-time reward
     const elapsedMs = Date.now() - last.getTime();
-    const fullDays  = Math.floor(elapsedMs / MS_PER_DAY);
-    return fullDays * REWARD_PER_DAY;
+    return Math.floor(elapsedMs / MS_PER_DAY) * REWARD_PER_DAY;
   };
 
   /**
-   * How many ms remain until the NEXT reward period opens.
-   * (i.e. time until elapsedMs reaches the next multiple of MS_PER_DAY)
+   * Ms remaining until the next reward window opens.
+   * Only meaningful when lastClaimAt is set and no reward is pending.
    */
   const getMsUntilNext = () => {
-    const last      = getLastClaim();
+    const last = getLastClaim();
+    if (!last) return 0;
     const elapsedMs = Date.now() - last.getTime();
-    // If there's already unclaimed reward this should be 0, but guard anyway.
     const remainder = elapsedMs % MS_PER_DAY;
     return MS_PER_DAY - remainder;
   };
 
-  /** Format milliseconds → "HH:MM:SS" */
+  /** ms → "HH:MM:SS" */
   const fmtCountdown = (ms) => {
     const totalSec = Math.max(0, Math.floor(ms / 1000));
     const h = Math.floor(totalSec / 3600);
@@ -412,49 +415,40 @@ const DailyReward = (() => {
     return [h, m, s].map(v => String(v).padStart(2, "0")).join(":");
   };
 
-  // ── DOM targets ────────────────────────────────────
-  // We manipulate the .daily-reward container directly.
-  const container   = () => document.querySelector(".daily-reward");
+  // ── DOM ────────────────────────────────────────────
+
+  const container = () => document.querySelector(".daily-reward");
 
   const renderClaimable = (amount) => {
     const c = container();
     if (!c) return;
     c.innerHTML = `
       <span class="credits-label">
-        Daily Rewards: <b id="daily-reward-amount" class="credits-val">${amount}</b>
+        Daily Rewards <b id="daily-reward-amount" class="credits-val">${amount}</b>
       </span>
-      <button id="btn-claim-reward" class="btn-claim">Claim</button>`;
+      <button id="btn-claim-reward" class="btn btn-claim-reward">🎁 Claim</button>`;
 
-    // Re-bind click (element was recreated)
-    c.querySelector("#btn-claim-reward")
-      .addEventListener("click", claim);
+    c.querySelector("#btn-claim-reward").addEventListener("click", claim);
   };
 
   const renderCountdown = () => {
-    stopCountdown(); // clear any previous interval
-
+    stopCountdown();
     const c = container();
     if (!c) return;
 
-    // Build the "waiting" UI
     c.innerHTML = `
       <span class="credits-label daily-waiting">
-        Next free 100 credits in <b id="daily-countdown" class="credits-val"></b>
+        Free +100 credits in <b id="daily-countdown" class="credits-val countdown-val"></b>
       </span>`;
 
     const tick = () => {
       const msLeft = getMsUntilNext();
-      const el     = document.getElementById("daily-countdown");
+      const el = document.getElementById("daily-countdown");
       if (el) el.textContent = fmtCountdown(msLeft);
-
-      // When countdown expires → switch back to claimable UI
-      if (msLeft <= 0) {
-        stopCountdown();
-        updateUI();
-      }
+      if (msLeft <= 1000) { stopCountdown(); updateUI(); }
     };
 
-    tick(); // run immediately so there's no 1-second blank
+    tick();
     _countdownInterval = setInterval(tick, 1000);
   };
 
@@ -467,36 +461,29 @@ const DailyReward = (() => {
 
   // ── Public API ─────────────────────────────────────
 
-  /** Call once after login / screen switch to set correct state. */
   const updateUI = () => {
     const amount = getAvailableReward();
-    if (amount > 0) {
-      stopCountdown();
-      renderClaimable(amount);
-    } else {
-      renderCountdown();
-    }
+    if (amount > 0) { stopCountdown(); renderClaimable(amount); }
+    else            { renderCountdown(); }
   };
 
-  /** Called when the player taps "Claim". */
   const claim = async () => {
     const amount = getAvailableReward();
     if (amount <= 0) return;
 
+    // Disable button immediately to prevent double-click
+    const btn = document.getElementById("btn-claim-reward");
+    if (btn) btn.disabled = true;
+
     await CreditsModule.add(amount);
 
-    // Save claim time as the last full-day boundary, NOT `now`,
-    // so accumulated days are consumed but partial-day progress is kept.
-    // Strategy: advance lastClaimAt by (fullDays × MS_PER_DAY).
-    const last     = getLastClaim();
-    const fullDays = amount / REWARD_PER_DAY;
-    const newClaim = new Date(last.getTime() + fullDays * MS_PER_DAY);
+    // Always anchor the new lastClaimAt to `now` so the 24h window is clean.
+    // Accumulated unclaimed days are consumed; partial-day since last boundary is lost
+    // in favour of simplicity (fair trade-off).
+    const now = new Date();
+    State.userData.lastClaimAt = now;
+    await updateDoc(DB.userRef(State.user.uid), { lastClaimAt: now });
 
-    State.userData.lastClaimAt = newClaim;
-
-    await updateDoc(DB.userRef(State.user.uid), { lastClaimAt: newClaim });
-
-    // Switch to countdown immediately
     renderCountdown();
   };
 
