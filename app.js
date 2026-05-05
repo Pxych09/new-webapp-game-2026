@@ -166,8 +166,9 @@ const DB = {
   async createUser(uid, email) {
     const data = {
       email,
-      credits:   GAME_CONFIG.STARTING_CREDITS,
+      credits: GAME_CONFIG.STARTING_CREDITS,
       lastLogin: serverTimestamp(),
+      lastClaimAt: null,
     };
     await setDoc(DB.userRef(uid), data);
     return data;
@@ -226,8 +227,7 @@ const Router = {
 };
 
 // ═══════════════════════════════════════════════════
-// GRID MODULE (Updated as of May 5, 2026)
-// (Updated with exact layout)
+// GRID MODULE
 // ═══════════════════════════════════════════════════
 
 const GridModule = (() => {
@@ -238,8 +238,6 @@ const GridModule = (() => {
     const emoji = FIXED_LAYOUT[idx];
     fruitLayout[idx] = FRUITS.find(f => f.emoji === emoji);
   });
-
-  console.log(GridUtils.borderIndices())
 
   let cells = [];
 
@@ -326,7 +324,7 @@ const CreditsModule = (() => {
     $("game-credits").textContent = v;
   };
 
-  const bump              = () => {
+  const bump = () => {
     animateBump($("hdr-credits"),  "bump");
     animateBump($("game-credits"), "bump");
   };
@@ -354,6 +352,158 @@ const CreditsModule = (() => {
 })();
 
 // ═══════════════════════════════════════════════════
+// DAILY REWARD MODULE (Fixed May 5, 2026)
+//
+// Rules:
+//  • Every full 24-hr window since last claim = +100 credits
+//  • If never claimed, the account creation counts as time 0
+//    (we fall back to a very old date so first-timers always get 100)
+//  • Claiming stores `now` as lastClaimAt — countdown resets to 24h
+//  • After claim: button is hidden, live countdown shown instead
+//  • Countdown ticks every second; when it hits 0 the claim UI reappears
+// ═══════════════════════════════════════════════════
+
+const DailyReward = (() => {
+  const REWARD_PER_DAY = 100;
+  const MS_PER_DAY     = 24 * 60 * 60 * 1000;
+
+  let _countdownInterval = null; // holds setInterval id for cleanup
+
+  // ── Helpers ────────────────────────────────────────
+
+  /** Returns the last-claim Date, or epoch 0 if never claimed. */
+  const getLastClaim = () => {
+    const raw = State.userData.lastClaimAt;
+    if (!raw) return new Date(0);                  // never claimed → treat as very old
+    if (raw.toDate) return raw.toDate();            // Firestore Timestamp
+    if (raw instanceof Date) return raw;
+    return new Date(raw);
+  };
+
+  /**
+   * How many full 24-hr periods have elapsed since lastClaimAt?
+   * e.g. 3 days unclaimed → 300 credits available.
+   */
+  const getAvailableReward = () => {
+    const last      = getLastClaim();
+    const elapsedMs = Date.now() - last.getTime();
+    const fullDays  = Math.floor(elapsedMs / MS_PER_DAY);
+    return fullDays * REWARD_PER_DAY;
+  };
+
+  /**
+   * How many ms remain until the NEXT reward period opens.
+   * (i.e. time until elapsedMs reaches the next multiple of MS_PER_DAY)
+   */
+  const getMsUntilNext = () => {
+    const last      = getLastClaim();
+    const elapsedMs = Date.now() - last.getTime();
+    // If there's already unclaimed reward this should be 0, but guard anyway.
+    const remainder = elapsedMs % MS_PER_DAY;
+    return MS_PER_DAY - remainder;
+  };
+
+  /** Format milliseconds → "HH:MM:SS" */
+  const fmtCountdown = (ms) => {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return [h, m, s].map(v => String(v).padStart(2, "0")).join(":");
+  };
+
+  // ── DOM targets ────────────────────────────────────
+  // We manipulate the .daily-reward container directly.
+  const container   = () => document.querySelector(".daily-reward");
+
+  const renderClaimable = (amount) => {
+    const c = container();
+    if (!c) return;
+    c.innerHTML = `
+      <span class="credits-label">
+        Daily Rewards: <b id="daily-reward-amount" class="credits-val">${amount}</b>
+      </span>
+      <button id="btn-claim-reward" class="btn-claim">Claim</button>`;
+
+    // Re-bind click (element was recreated)
+    c.querySelector("#btn-claim-reward")
+      .addEventListener("click", claim);
+  };
+
+  const renderCountdown = () => {
+    stopCountdown(); // clear any previous interval
+
+    const c = container();
+    if (!c) return;
+
+    // Build the "waiting" UI
+    c.innerHTML = `
+      <span class="credits-label daily-waiting">
+        Next free 100 credits in <b id="daily-countdown" class="credits-val"></b>
+      </span>`;
+
+    const tick = () => {
+      const msLeft = getMsUntilNext();
+      const el     = document.getElementById("daily-countdown");
+      if (el) el.textContent = fmtCountdown(msLeft);
+
+      // When countdown expires → switch back to claimable UI
+      if (msLeft <= 0) {
+        stopCountdown();
+        updateUI();
+      }
+    };
+
+    tick(); // run immediately so there's no 1-second blank
+    _countdownInterval = setInterval(tick, 1000);
+  };
+
+  const stopCountdown = () => {
+    if (_countdownInterval !== null) {
+      clearInterval(_countdownInterval);
+      _countdownInterval = null;
+    }
+  };
+
+  // ── Public API ─────────────────────────────────────
+
+  /** Call once after login / screen switch to set correct state. */
+  const updateUI = () => {
+    const amount = getAvailableReward();
+    if (amount > 0) {
+      stopCountdown();
+      renderClaimable(amount);
+    } else {
+      renderCountdown();
+    }
+  };
+
+  /** Called when the player taps "Claim". */
+  const claim = async () => {
+    const amount = getAvailableReward();
+    if (amount <= 0) return;
+
+    await CreditsModule.add(amount);
+
+    // Save claim time as the last full-day boundary, NOT `now`,
+    // so accumulated days are consumed but partial-day progress is kept.
+    // Strategy: advance lastClaimAt by (fullDays × MS_PER_DAY).
+    const last     = getLastClaim();
+    const fullDays = amount / REWARD_PER_DAY;
+    const newClaim = new Date(last.getTime() + fullDays * MS_PER_DAY);
+
+    State.userData.lastClaimAt = newClaim;
+
+    await updateDoc(DB.userRef(State.user.uid), { lastClaimAt: newClaim });
+
+    // Switch to countdown immediately
+    renderCountdown();
+  };
+
+  return { updateUI, claim, stopCountdown };
+})();
+
+// ═══════════════════════════════════════════════════
 // SOUND MODULE (lightweight tick + win + bomb)
 // ═══════════════════════════════════════════════════
 
@@ -367,35 +517,27 @@ const Sound = (() => {
 
   const playTone = (freq = 800, duration = 0.05, type = "square", volume = 0.05) => {
     const audioCtx = getCtx();
-
     const osc  = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-
     osc.type = type;
     osc.frequency.value = freq;
-
     gain.gain.value = volume;
-
     osc.connect(gain);
     gain.connect(audioCtx.destination);
-
     osc.start();
-
-    // quick fade out (prevents click noise)
     gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-
     osc.stop(audioCtx.currentTime + duration);
   };
 
   return {
-    tick: () => playTone(900, 0.03),       // spinning tick
-    win:  () => playTone(1200, 0.15),      // win sound
-    bomb: () => playTone(120, 0.25, "sawtooth", 0.08) // bomb sound
+    tick: () => playTone(900, 0.03),
+    win:  () => playTone(1200, 0.15),
+    bomb: () => playTone(120, 0.25, "sawtooth", 0.08)
   };
 })();
 
 // ═══════════════════════════════════════════════════
-// SPIN MODULE (Updated as of May 5, 2026)
+// SPIN MODULE
 // ═══════════════════════════════════════════════════
 
 const SpinModule = (() => {
@@ -408,7 +550,6 @@ const SpinModule = (() => {
 
   const showResult = (fruit) => {
     const resultEl = $("result-text");
-    
     if (fruit.emoji === "💣") {
       resultEl.textContent = `💥 BOOM! Fruit Bomb! You got nothing.`;
       resultEl.style.color = "#ff4444";
@@ -416,45 +557,34 @@ const SpinModule = (() => {
       resultEl.textContent = `You got ${fruit.emoji} = ${formatCurrency(fruit.value)}`;
       resultEl.style.color = "";
     }
-    
     showEl($("result-display"));
   };
 
-const animate = async (borders) => {
-  const ticks = Math.floor(GAME_CONFIG.SPIN_DURATION_MS / GAME_CONFIG.TICK_MS);
+  const animate = async (borders) => {
+    const ticks = Math.floor(GAME_CONFIG.SPIN_DURATION_MS / GAME_CONFIG.TICK_MS);
+    const winningFruit = getWeightedFruit();
 
-  const winningFruit = getWeightedFruit();
+    let winnerIdx = borders.find(idx =>
+      GridModule.getFruitAt(idx).emoji === winningFruit.emoji
+    );
+    if (winnerIdx === undefined) {
+      winnerIdx = borders[Math.floor(Math.random() * borders.length)];
+    }
 
-  let winnerIdx = borders.find(idx => 
-    GridModule.getFruitAt(idx).emoji === winningFruit.emoji
-  );
+    for (let t = 0; t < ticks; t++) {
+      const idx = borders[t % borders.length];
+      GridModule.setLit(idx);
+      Sound.tick();
+      await sleep(GAME_CONFIG.TICK_MS);
+    }
 
-  if (winnerIdx === undefined) {
-    winnerIdx = borders[Math.floor(Math.random() * borders.length)];
-  }
+    GridModule.setWinner(winnerIdx);
 
-  for (let t = 0; t < ticks; t++) {
-    const idx = borders[t % borders.length];
+    if (winningFruit.emoji === "💣") Sound.bomb();
+    else Sound.win();
 
-    GridModule.setLit(idx);
-
-    // 🔊 PLAY TICK SOUND
-    Sound.tick();
-
-    await sleep(GAME_CONFIG.TICK_MS);
-  }
-
-  GridModule.setWinner(winnerIdx);
-
-  // 🔊 FINAL SOUND
-  if (winningFruit.emoji === "💣") {
-    Sound.bomb();
-  } else {
-    Sound.win();
-  }
-
-  return winningFruit;
-};
+    return winningFruit;
+  };
 
   const spin = async () => {
     if (State.isSpinning) return;
@@ -471,23 +601,14 @@ const animate = async (borders) => {
     hideEl($("result-display"));
 
     const fruit = await animate(GridModule.getBorderIndices());
-    
     showResult(fruit);
-    
+
     if (fruit.value > 0) {
       await CreditsModule.add(fruit.value);
-    } else if (fruit.emoji === "💣") {
-      // Optional: small penalty for bomb?
-      // await CreditsModule.deduct(2); // example
     }
 
     DB.logHistory(State.user.uid, fruit.emoji, fruit.value).catch(() => {});
-    
-    HistoryModule.prepend({ 
-      result: fruit.emoji, 
-      reward: fruit.value, 
-      createdAt: null 
-    });
+    HistoryModule.prepend({ result: fruit.emoji, reward: fruit.value, createdAt: null });
 
     setSpinning(false);
   };
@@ -496,7 +617,7 @@ const animate = async (borders) => {
 })();
 
 // ═══════════════════════════════════════════════════
-// AUTH MODULE  (Google popup — no email needed)
+// AUTH MODULE
 // ═══════════════════════════════════════════════════
 
 const AuthModule = {
@@ -509,7 +630,6 @@ const AuthModule = {
 // ═══════════════════════════════════════════════════
 
 const bindEvents = () => {
-  // Google sign-in button
   $("btn-google-signin").addEventListener("click", async () => {
     const btn   = $("btn-google-signin");
     const errEl = $("auth-error");
@@ -517,7 +637,6 @@ const bindEvents = () => {
     hideEl(errEl);
     try {
       await AuthModule.signIn();
-      // onAuthStateChanged handles screen transition
     } catch (err) {
       errEl.textContent = `Sign-in failed: ${err.message}`;
       showEl(errEl);
@@ -525,20 +644,19 @@ const bindEvents = () => {
     }
   });
 
-  // Logout (both screens)
-  $("btn-logout").addEventListener("click",  () => AuthModule.signOut());
-  $("btn-logout2").addEventListener("click", () => AuthModule.signOut());
+  // NOTE: btn-claim-reward is now dynamically rendered by DailyReward.renderClaimable()
+  // so we do NOT bind it here. The click handler is attached inside renderClaimable().
 
-  // Dashboard → Game
+  $("btn-logout").addEventListener("click",  () => { DailyReward.stopCountdown(); AuthModule.signOut(); });
+  $("btn-logout2").addEventListener("click", () => { DailyReward.stopCountdown(); AuthModule.signOut(); });
+
   $("btn-play-fruit").addEventListener("click", () => {
     Router.goto("screen-game");
     HistoryModule.load(State.user.uid);
+    DailyReward.updateUI(); // re-sync countdown when entering game screen
   });
 
-  // Game → Dashboard
   $("btn-back").addEventListener("click", () => Router.goto("screen-dashboard"));
-
-  // Spin
   $("btn-spin").addEventListener("click", SpinModule.spin);
 };
 
@@ -550,7 +668,6 @@ const onUserSignedIn = async (user) => {
   State.user     = user;
   State.userData = await DB.ensureUser(user.uid, user.email);
 
-  // Populate header info
   $("hdr-email").textContent  = user.email;
   $("game-email").textContent = user.email;
 
@@ -565,9 +682,11 @@ const onUserSignedIn = async (user) => {
   CreditsModule.setDisplay(State.userData.credits);
   GridModule.render();
   Router.goto("screen-dashboard");
+  DailyReward.updateUI();
 };
 
 const onUserSignedOut = () => {
+  DailyReward.stopCountdown();
   State.user     = null;
   State.userData = null;
   Router.goto("screen-auth");
