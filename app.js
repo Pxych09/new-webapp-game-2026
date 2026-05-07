@@ -30,7 +30,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ═══════════════════════════════════════════════════
-// CONFIG — paste your Firebase project values here
+// CONFIG
 // ═══════════════════════════════════════════════════
 
 const FIREBASE_CONFIG = {
@@ -53,6 +53,7 @@ const GAME_CONFIG = {
 // ═══════════════════════════════════════════════════
 // FRUITS CONFIG (Weights for spinning probability)
 // ═══════════════════════════════════════════════════
+
 const FRUITS = [
   { emoji: "🍒", value: 1,   weight: 45, label: "cherry" },
   { emoji: "🍍", value: 10,  weight: 12, label: "pineapple" },
@@ -65,29 +66,15 @@ const FRUITS = [
 const TOTAL_WEIGHT = FRUITS.reduce((sum, f) => sum + f.weight, 0);
 
 // ═══════════════════════════════════════════════════
-// EXACT BORDER LAYOUT — Matching your image
+// FIXED BORDER LAYOUT
 // ═══════════════════════════════════════════════════
 
 const FIXED_LAYOUT = {
-  0:"🍒",1:"🍍",2:"💣",3:"🍎",4:"🍒",
-  5:"🍎",9:"🍍",
-  10:"🍒",14:"🍒",
-  15:"💣",19:"💣",
-  20:"🍒",21:"🥭",22:"🍫",23:"🥭",24:"🍒"
-};
-
-// ═══════════════════════════════════════════════════
-// UTILITY HELPERS (Added: May 5)
-// ═══════════════════════════════════════════════════
-
-const getWeightedFruit = () => {
-  let random = Math.random() * TOTAL_WEIGHT;
-  
-  for (const fruit of FRUITS) {
-    random -= fruit.weight;
-    if (random <= 0) return fruit;
-  }
-  return FRUITS[FRUITS.length - 1]; // fallback
+  0:"🍒", 1:"🍍", 2:"💣", 3:"🍎", 4:"🍒",
+  5:"🍎",                          9:"🍍",
+  10:"🍒",                         14:"🍒",
+  15:"💣",                         19:"💣",
+  20:"🍒", 21:"🥭", 22:"🍫", 23:"🥭", 24:"🍒"
 };
 
 // ═══════════════════════════════════════════════════
@@ -124,8 +111,17 @@ const animateBump = (el, cssClass, duration = 500) => {
   setTimeout(() => cls.remove(el, cssClass), duration);
 };
 
+const getWeightedFruit = () => {
+  let random = Math.random() * TOTAL_WEIGHT;
+  for (const fruit of FRUITS) {
+    random -= fruit.weight;
+    if (random <= 0) return fruit;
+  }
+  return FRUITS[FRUITS.length - 1];
+};
+
 // ═══════════════════════════════════════════════════
-// GRID UTILITIES  (pure — no DOM)
+// GRID UTILITIES (pure — no DOM)
 // ═══════════════════════════════════════════════════
 
 const GridUtils = (() => {
@@ -166,8 +162,8 @@ const DB = {
   async createUser(uid, email) {
     const data = {
       email,
-      credits: GAME_CONFIG.STARTING_CREDITS,
-      lastLogin: serverTimestamp(),
+      credits:     GAME_CONFIG.STARTING_CREDITS,
+      lastLogin:   serverTimestamp(),
       lastClaimAt: null,
     };
     await setDoc(DB.userRef(uid), data);
@@ -210,9 +206,9 @@ const DB = {
 // ═══════════════════════════════════════════════════
 
 const State = {
-  user:       null,   // Firebase Auth user
-  userData:   null,   // Firestore document
-  isSpinning: false,
+  user:       null,
+  userData:   null,
+  isSpinning: false,  // ← single source of truth for spin lock
 };
 
 // ═══════════════════════════════════════════════════
@@ -231,7 +227,7 @@ const Router = {
 // ═══════════════════════════════════════════════════
 
 const GridModule = (() => {
-  const borderIdx = GridUtils.borderIndices();
+  const borderIdx   = GridUtils.borderIndices();
   const fruitLayout = {};
 
   borderIdx.forEach(idx => {
@@ -247,36 +243,34 @@ const GridModule = (() => {
     cells = [];
 
     for (let i = 0; i < GridUtils.TOTAL; i++) {
-      const el = document.createElement("div");
+      const el       = document.createElement("div");
       const isBorder = GridUtils.isBorder(i);
-      
-      el.className = isBorder ? "cell fruit" : "cell inner";
-      
+      el.className   = isBorder ? "cell fruit" : "cell inner";
+
       if (isBorder) {
-        const fruit = fruitLayout[i];
+        const fruit    = fruitLayout[i];
         el.textContent = fruit.emoji;
         el.dataset.index = i;
-
         if (fruit.emoji === "💣") el.classList.add("bomb");
         if (fruit.emoji === "🍫") el.classList.add("jackpot");
       } else {
         el.textContent = "X";
       }
-      
+
       grid.appendChild(el);
       cells.push(el);
     }
   };
 
-  const clearHighlights = () => borderIdx.forEach(i => 
-    cls.remove(cells[i], "lit", "winner")
-  );
+  const clearHighlights = () =>
+    borderIdx.forEach(i => cls.remove(cells[i], "lit", "winner"));
 
-  const setLit    = (idx) => { clearHighlights(); cls.add(cells[idx], "lit"); };
+  const setLit    = (idx) => { clearHighlights(); cls.add(cells[idx], "lit");    };
   const setWinner = (idx) => { clearHighlights(); cls.add(cells[idx], "winner"); };
-  const getFruitAt = (idx) => fruitLayout[idx];
+  const getFruitAt       = (idx) => fruitLayout[idx];
+  const getBorderIndices = ()    => borderIdx;
 
-  return { render, clearHighlights, setLit, setWinner, getFruitAt, getBorderIndices: () => borderIdx };
+  return { render, clearHighlights, setLit, setWinner, getFruitAt, getBorderIndices };
 })();
 
 // ═══════════════════════════════════════════════════
@@ -352,14 +346,7 @@ const CreditsModule = (() => {
 })();
 
 // ═══════════════════════════════════════════════════
-// DAILY REWARD MODULE (Updated May 5, 2026)
-//
-// Rules:
-//  • lastClaimAt === null  → first-timer or never claimed → show 100 to claim
-//  • lastClaimAt set       → every full 24-hr window elapsed = +100 credits
-//  • Claiming saves `now` as lastClaimAt; countdown runs from that moment
-//  • After claim: Claim button replaced by live HH:MM:SS countdown
-//  • Countdown hits 0 → claimable UI reappears automatically
+// DAILY REWARD MODULE
 // ═══════════════════════════════════════════════════
 
 const DailyReward = (() => {
@@ -368,36 +355,21 @@ const DailyReward = (() => {
 
   let _countdownInterval = null;
 
-  // ── Helpers ────────────────────────────────────────
-
-  /**
-   * Returns the last-claim Date, or null if never claimed.
-   * null is handled explicitly — we never fall back to epoch.
-   */
   const getLastClaim = () => {
     const raw = State.userData.lastClaimAt;
-    if (!raw) return null;                  // never claimed
-    if (raw.toDate) return raw.toDate();    // Firestore Timestamp
+    if (!raw) return null;
+    if (raw.toDate) return raw.toDate();
     if (raw instanceof Date) return raw;
     return new Date(raw);
   };
 
-  /**
-   * How many credits are currently claimable.
-   *  - null lastClaimAt (first-timer or never claimed) → always 100
-   *  - otherwise: fullDays × 100
-   */
   const getAvailableReward = () => {
     const last = getLastClaim();
-    if (!last) return REWARD_PER_DAY;                        // free first-time reward
+    if (!last) return REWARD_PER_DAY;
     const elapsedMs = Date.now() - last.getTime();
     return Math.floor(elapsedMs / MS_PER_DAY) * REWARD_PER_DAY;
   };
 
-  /**
-   * Ms remaining until the next reward window opens.
-   * Only meaningful when lastClaimAt is set and no reward is pending.
-   */
   const getMsUntilNext = () => {
     const last = getLastClaim();
     if (!last) return 0;
@@ -406,7 +378,6 @@ const DailyReward = (() => {
     return MS_PER_DAY - remainder;
   };
 
-  /** ms → "HH:MM:SS" */
   const fmtCountdown = (ms) => {
     const totalSec = Math.max(0, Math.floor(ms / 1000));
     const h = Math.floor(totalSec / 3600);
@@ -414,8 +385,6 @@ const DailyReward = (() => {
     const s = totalSec % 60;
     return [h, m, s].map(v => String(v).padStart(2, "0")).join(":");
   };
-
-  // ── DOM ────────────────────────────────────────────
 
   const container = () => document.querySelector(".daily-reward");
 
@@ -427,7 +396,6 @@ const DailyReward = (() => {
         Daily Rewards <b id="daily-reward-amount" class="credits-val">${amount}</b>
       </span>
       <button id="btn-claim-reward" class="btn btn-claim-reward">🎁 Claim</button>`;
-
     c.querySelector("#btn-claim-reward").addEventListener("click", claim);
   };
 
@@ -435,7 +403,6 @@ const DailyReward = (() => {
     stopCountdown();
     const c = container();
     if (!c) return;
-
     c.innerHTML = `
       <span class="credits-label daily-waiting">
         Free +100 credits in <b id="daily-countdown" class="credits-val countdown-val"></b>
@@ -447,7 +414,6 @@ const DailyReward = (() => {
       if (el) el.textContent = fmtCountdown(msLeft);
       if (msLeft <= 1000) { stopCountdown(); updateUI(); }
     };
-
     tick();
     _countdownInterval = setInterval(tick, 1000);
   };
@@ -459,8 +425,6 @@ const DailyReward = (() => {
     }
   };
 
-  // ── Public API ─────────────────────────────────────
-
   const updateUI = () => {
     const amount = getAvailableReward();
     if (amount > 0) { stopCountdown(); renderClaimable(amount); }
@@ -470,20 +434,12 @@ const DailyReward = (() => {
   const claim = async () => {
     const amount = getAvailableReward();
     if (amount <= 0) return;
-
-    // Disable button immediately to prevent double-click
     const btn = document.getElementById("btn-claim-reward");
     if (btn) btn.disabled = true;
-
     await CreditsModule.add(amount);
-
-    // Always anchor the new lastClaimAt to `now` so the 24h window is clean.
-    // Accumulated unclaimed days are consumed; partial-day since last boundary is lost
-    // in favour of simplicity (fair trade-off).
     const now = new Date();
     State.userData.lastClaimAt = now;
     await updateDoc(DB.userRef(State.user.uid), { lastClaimAt: now });
-
     renderCountdown();
   };
 
@@ -491,17 +447,15 @@ const DailyReward = (() => {
 })();
 
 // ═══════════════════════════════════════════════════
-// SOUND MODULE (lightweight tick + win + bomb)
+// SOUND MODULE
 // ═══════════════════════════════════════════════════
 
 const Sound = (() => {
   let ctx;
-
   const getCtx = () => {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
     return ctx;
   };
-
   const playTone = (freq = 800, duration = 0.05, type = "square", volume = 0.05) => {
     const audioCtx = getCtx();
     const osc  = audioCtx.createOscillator();
@@ -515,11 +469,10 @@ const Sound = (() => {
     gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
     osc.stop(audioCtx.currentTime + duration);
   };
-
   return {
-    tick: () => playTone(900, 0.03),
+    tick: () => playTone(900,  0.03),
     win:  () => playTone(1200, 0.15),
-    bomb: () => playTone(120, 0.25, "sawtooth", 0.08)
+    bomb: () => playTone(120,  0.25, "sawtooth", 0.08),
   };
 })();
 
@@ -530,15 +483,19 @@ const Sound = (() => {
 const SpinModule = (() => {
   const spinBtn = () => $("btn-spin");
 
+  /**
+   * Central lock setter — always keeps State.isSpinning and the
+   * button's disabled attribute in sync. Call this in ONE place only.
+   */
   const setSpinning = (v) => {
-    State.isSpinning = v;
+    State.isSpinning   = v;
     spinBtn().disabled = v;
   };
 
   const showResult = (fruit) => {
     const resultEl = $("result-text");
     if (fruit.emoji === "💣") {
-      resultEl.textContent = `💥 BOOM! Fruit Bomb! You got nothing.`;
+      resultEl.textContent = "💥 BOOM! Fruit Bomb! You got nothing.";
       resultEl.style.color = "#ff4444";
     } else {
       resultEl.textContent = `You got ${fruit.emoji} = ${formatCurrency(fruit.value)}`;
@@ -548,7 +505,7 @@ const SpinModule = (() => {
   };
 
   const animate = async (borders) => {
-    const ticks = Math.floor(GAME_CONFIG.SPIN_DURATION_MS / GAME_CONFIG.TICK_MS);
+    const ticks        = Math.floor(GAME_CONFIG.SPIN_DURATION_MS / GAME_CONFIG.TICK_MS);
     const winningFruit = getWeightedFruit();
 
     let winnerIdx = borders.find(idx =>
@@ -559,14 +516,12 @@ const SpinModule = (() => {
     }
 
     for (let t = 0; t < ticks; t++) {
-      const idx = borders[t % borders.length];
-      GridModule.setLit(idx);
+      GridModule.setLit(borders[t % borders.length]);
       Sound.tick();
       await sleep(GAME_CONFIG.TICK_MS);
     }
 
     GridModule.setWinner(winnerIdx);
-
     if (winningFruit.emoji === "💣") Sound.bomb();
     else Sound.win();
 
@@ -574,18 +529,28 @@ const SpinModule = (() => {
   };
 
   const spin = async () => {
+    // ─────────────────────────────────────────────────────────────
+    // RAPID-CLICK GUARD: lock immediately — before any async work.
+    // This is a synchronous check+set so no second click can slip
+    // through between an await and the next state check.
+    // ─────────────────────────────────────────────────────────────
     if (State.isSpinning) return;
+    setSpinning(true);            // ← lock FIRST, async work AFTER
 
-    const ok = await CreditsModule.deduct(GAME_CONFIG.SPIN_COST);
-    if (!ok) {
+    // Insufficient credits check
+    if (State.userData.credits < GAME_CONFIG.SPIN_COST) {
       CreditsModule.flashInsufficient();
       $("result-text").textContent = "⚠️ Not enough credits!";
+      $("result-text").style.color = "";
       showEl($("result-display"));
+      setSpinning(false);         // release lock so user can try again
       return;
     }
 
-    setSpinning(true);
     hideEl($("result-display"));
+
+    // Deduct credits (we already confirmed balance above)
+    await CreditsModule.deduct(GAME_CONFIG.SPIN_COST);
 
     const fruit = await animate(GridModule.getBorderIndices());
     showResult(fruit);
@@ -597,7 +562,7 @@ const SpinModule = (() => {
     DB.logHistory(State.user.uid, fruit.emoji, fruit.value).catch(() => {});
     HistoryModule.prepend({ result: fruit.emoji, reward: fruit.value, createdAt: null });
 
-    setSpinning(false);
+    setSpinning(false);           // release lock when fully done
   };
 
   return { spin };
@@ -631,19 +596,18 @@ const bindEvents = () => {
     }
   });
 
-  // NOTE: btn-claim-reward is now dynamically rendered by DailyReward.renderClaimable()
-  // so we do NOT bind it here. The click handler is attached inside renderClaimable().
-
   $("btn-logout").addEventListener("click",  () => { DailyReward.stopCountdown(); AuthModule.signOut(); });
   $("btn-logout2").addEventListener("click", () => { DailyReward.stopCountdown(); AuthModule.signOut(); });
 
   $("btn-play-fruit").addEventListener("click", () => {
     Router.goto("screen-game");
     HistoryModule.load(State.user.uid);
-    DailyReward.updateUI(); // re-sync countdown when entering game screen
+    DailyReward.updateUI();
   });
 
   $("btn-back").addEventListener("click", () => Router.goto("screen-dashboard"));
+
+  // Single listener — SpinModule.spin() handles all its own locking internally
   $("btn-spin").addEventListener("click", SpinModule.spin);
 };
 
