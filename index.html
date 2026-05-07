@@ -105,22 +105,30 @@
   <!-- ── FRUIT GAME ──────────────────────────────────── -->
   <div id="screen-game" class="screen">
     <header class="top-bar">
+      <!-- LEFT: back + nickname -->
       <div class="top-bar-left">
-        <button id="btn-back" class="btn btn-sm">Back</button>
+        <button id="btn-back" class="btn btn-sm">← Back</button>
         <div class="nickname-wrap">
-          <span class="nickname-display" id="game-nickname-display" title="Click to edit your name"></span>
+          <span class="nickname-display" id="game-nickname-display" title="Click to edit"></span>
           <button class="nickname-edit-btn" id="game-nickname-edit-btn" title="Edit name">✏️</button>
           <input class="nickname-input hidden" id="game-nickname-input" maxlength="20" placeholder="Your nickname…" />
           <button class="nickname-save-btn hidden" id="game-nickname-save-btn" title="Save">✓</button>
         </div>
       </div>
-      <div class="top-bar-center">
-        <span class="credits-label">CREDITS</span>
-        <span id="game-credits" class="credits-val">—</span>
-      </div>
+
+      <!-- RIGHT: credits pill + hamburger -->
       <div class="top-bar-right">
-        <span id="game-email" class="user-email">—</span>
-        <button id="btn-logout2" class="btn btn-sm">Logout</button>
+        <div class="credits-pill">
+          <span class="credits-label">CREDITS</span>
+          <span id="game-credits" class="credits-val">—</span>
+        </div>
+        <div class="menu-btn" id="game-menu-btn" title="Menu" role="button" aria-label="Open menu">
+          ☰
+          <div class="menu-dropdown hidden" id="game-menu-dropdown">
+            <div class="menu-dropdown-email" id="game-email">—</div>
+            <button id="btn-logout2" class="btn btn-sm">🚪 Logout</button>
+          </div>
+        </div>
       </div>
     </header>
 
