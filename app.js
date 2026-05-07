@@ -26,6 +26,9 @@ import {
   orderBy,
   limit,
   getDocs,
+  deleteDoc,
+  writeBatch,
+  Timestamp,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
@@ -96,6 +99,7 @@ const cls = {
   add:    (el, ...c) => el?.classList.add(...c),
   remove: (el, ...c) => el?.classList.remove(...c),
   toggle: (el, c, v) => el?.classList.toggle(c, v),
+  has:    (el, c)    => el?.classList.contains(c) ?? false,
 };
 
 const showEl = (el) => cls.remove(el, "hidden");
@@ -165,6 +169,7 @@ const DB = {
       credits:     GAME_CONFIG.STARTING_CREDITS,
       lastLogin:   serverTimestamp(),
       lastClaimAt: null,
+      nickname:    "",
     };
     await setDoc(DB.userRef(uid), data);
     return data;
@@ -199,6 +204,73 @@ const DB = {
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
+
+  async updateNickname(uid, nickname) {
+    await updateDoc(DB.userRef(uid), { nickname });
+  },
+
+  /**
+   * Fetch top N users ordered by credits descending.
+   * Returns array of { uid, email, nickname, credits }
+   */
+  async getLeaderboard(topN = 20) {
+    const q = query(
+      collection(db, "users"),
+      orderBy("credits", "desc"),
+      limit(topN)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  },
+
+  /**
+   * Delete all gameHistory entries for this user that are older than today midnight.
+   * Uses batched deletes (Firestore max 500 per batch).
+   * Fire-and-forget — called silently in the background.
+   */
+  async purgeOldHistory(uid) {
+    const cutoff = new Date();
+    cutoff.setHours(0, 0, 0, 0); // today midnight = anything before this is stale
+
+    const q = query(
+      DB.historyCol(),
+      where("userId",    "==", uid),
+      where("createdAt", "<",  Timestamp.fromDate(cutoff))
+    );
+
+    const snap = await getDocs(q);
+    if (snap.empty) return; // nothing to purge
+
+    // Firestore batches are capped at 500 ops — chunk if needed
+    const BATCH_LIMIT = 499;
+    const docs = snap.docs;
+
+    for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
+      const batch = writeBatch(db);
+      docs.slice(i, i + BATCH_LIMIT).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+
+    console.log(`[Purge] Deleted ${docs.length} stale history record(s).`);
+  },
+
+  /**
+   * Fetch all history entries for a user within a specific day.
+   * @param {string} uid
+   * @param {Date} dayStart  — midnight of the target day (local time)
+   * @param {Date} dayEnd    — midnight of the next day (local time)
+   */
+  async getDayHistory(uid, dayStart, dayEnd) {
+    const q = query(
+      DB.historyCol(),
+      where("userId", "==", uid),
+      where("createdAt", ">=", Timestamp.fromDate(dayStart)),
+      where("createdAt", "<",  Timestamp.fromDate(dayEnd)),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  },
 };
 
 // ═══════════════════════════════════════════════════
@@ -216,9 +288,24 @@ const State = {
 // ═══════════════════════════════════════════════════
 
 const Router = {
-  SCREENS: ["screen-auth", "screen-dashboard", "screen-game"],
+  SCREENS: ["screen-splash", "screen-auth", "screen-dashboard", "screen-game"],
   goto(id) {
-    this.SCREENS.forEach((s) => cls.toggle($(s), "active", s === id));
+    const splash = $("screen-splash");
+
+    const doSwitch = () => {
+      this.SCREENS.forEach((s) => cls.toggle($(s), "active", s === id));
+    };
+
+    // If we're leaving the splash, fade it out then switch
+    if (splash && cls.has(splash, "active") && id !== "screen-splash") {
+      cls.add(splash, "fade-out");
+      splash.addEventListener("animationend", () => {
+        cls.remove(splash, "active", "fade-out");
+        doSwitch();
+      }, { once: true });
+    } else {
+      doSwitch();
+    }
   },
 };
 
@@ -278,30 +365,142 @@ const GridModule = (() => {
 // ═══════════════════════════════════════════════════
 
 const HistoryModule = (() => {
-  const buildItem = ({ result, reward, createdAt }) => {
+  // ── Date helpers ─────────────────────────────────
+
+  /** Returns midnight (00:00:00) of a given date in local time */
+  const todayStart = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
+  const todayEnd   = () => { const d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+1); return d; };
+
+  // ── In-memory session accumulator (Today only) ────
+  // Tracks spins added during the current session before Firestore confirms them
+  let _sessionSpins = 0;
+  let _sessionWon   = 0;
+
+  // ── DOM helpers ───────────────────────────────────
+
+  const setStatEl = (id, value) => {
+    const el = $(id);
+    if (el) el.textContent = value;
+  };
+
+  const renderStats = ({ todaySpins, todayWon, totalCount }) => {
+    setStatEl("stat-today-spins", todaySpins);
+    setStatEl("stat-today-won",   todayWon > 0 ? formatCurrency(todayWon) : "₱0.00");
+    setStatEl("history-count",    totalCount);
+    // Show/hide empty state
+    const list  = $("history-list");
+    const empty = $("history-empty");
+    if (list && empty) {
+      if (list.children.length === 0) {
+        cls.remove(empty, "hidden");
+      } else {
+        cls.add(empty, "hidden");
+      }
+    }
+  };
+
+  // ── Build a single history item card ─────────────
+
+  const buildItem = ({ result, reward, createdAt }, isNew = false) => {
     const el     = document.createElement("div");
-    el.className = "history-item";
+    el.className = "history-item" + (isNew ? " is-new" : "");
     const time   = createdAt?.toDate ? formatTime(createdAt.toDate()) : formatTime(new Date());
+    const isBomb = result === "💣";
     el.innerHTML = `
       <span class="hi-fruit">${result}</span>
-      <span class="hi-reward">+${formatCurrency(reward)}</span>
+      <span class="hi-middle">
+        <span class="hi-reward ${isBomb ? "hi-bomb" : ""}">
+          ${isBomb ? "💥 Nothing" : "+" + formatCurrency(reward)}
+        </span>
+        <span class="hi-label">${isBomb ? "Bomb hit!" : "Collected"}</span>
+      </span>
       <span class="hi-time">${time}</span>`;
     return el;
   };
 
+  // ── Public: prepend a new spin result (live update) ──
+
   const prepend = (entry) => {
     const list = $("history-list");
-    list.prepend(buildItem(entry));
-    while (list.children.length > 8) list.lastChild.remove();
+    if (!list) return;
+
+    // Add to list (cap at 50 visible items)
+    list.prepend(buildItem(entry, true));
+    while (list.children.length > 50) list.lastChild.remove();
+
+    // Remove is-new highlight after animation
+    setTimeout(() => list.firstChild?.classList.remove("is-new"), 1500);
+
+    // Update session accumulators
+    _sessionSpins += 1;
+    _sessionWon   += entry.reward || 0;
+
+    // Update today stats immediately (optimistic, no DB round-trip)
+    const todaySpinsEl = $("stat-today-spins");
+    const todayWonEl   = $("stat-today-won");
+    if (todaySpinsEl) {
+      const prev = parseInt(todaySpinsEl.textContent) || 0;
+      todaySpinsEl.textContent = prev + 1;
+      animateBump(todaySpinsEl, "stat-bump");
+    }
+    if (todayWonEl && entry.reward > 0) {
+      const prev = parseFloat((todayWonEl.textContent || "0").replace("₱","")) || 0;
+      todayWonEl.textContent = formatCurrency(prev + entry.reward);
+      animateBump(todayWonEl, "stat-bump");
+    }
+
+    // Update badge count
+    const badge = $("history-count");
+    if (badge) {
+      badge.textContent = parseInt(badge.textContent || "0") + 1;
+      animateBump(badge, "stat-bump");
+    }
+
+    // Hide empty state
+    cls.add($("history-empty"), "hidden");
   };
+
+  // ── Public: load full history from Firestore ──────
 
   const load = async (uid) => {
     const list = $("history-list");
+    if (!list) return;
     list.innerHTML = "";
+
+    // Silently purge stale records in the background — no await so UI loads immediately
+    DB.purgeOldHistory(uid).catch(err => console.warn("[Purge] failed:", err));
+
+    // Reset stats to loading state
+    ["stat-today-spins","stat-today-won"].forEach(id => setStatEl(id, "…"));
+
     try {
-      const items = await DB.getRecentHistory(uid);
-      items.forEach((item) => list.appendChild(buildItem(item)));
-    } catch (_) { /* non-critical */ }
+      // Parallel fetch: today stats + recent list
+      const [todayItems, recentItems] = await Promise.all([
+        DB.getDayHistory(uid, todayStart(), todayEnd()),
+        DB.getRecentHistory(uid, 50),
+      ]);
+
+      const sum = (items) => items.reduce((s, i) => s + (i.reward || 0), 0);
+
+      renderStats({
+        todaySpins: todayItems.length,
+        todayWon:   sum(todayItems),
+        totalCount: recentItems.length,
+      });
+
+      // Render recent list
+      recentItems.forEach(item => list.appendChild(buildItem(item)));
+      if (recentItems.length === 0) {
+        cls.remove($("history-empty"), "hidden");
+      } else {
+        cls.add($("history-empty"), "hidden");
+      }
+
+    } catch (err) {
+      console.error("History load failed:", err);
+      ["stat-today-spins","stat-today-won"]
+        .forEach(id => setStatEl(id, "—"));
+    }
   };
 
   return { prepend, load };
@@ -561,11 +760,188 @@ const SpinModule = (() => {
 
     DB.logHistory(State.user.uid, fruit.emoji, fruit.value).catch(() => {});
     HistoryModule.prepend({ result: fruit.emoji, reward: fruit.value, createdAt: null });
+    LeaderboardModule.refreshCurrentUser();
 
     setSpinning(false);           // release lock when fully done
   };
 
   return { spin };
+})();
+
+// ═══════════════════════════════════════════════════
+// LEADERBOARD MODULE
+// ═══════════════════════════════════════════════════
+
+const LeaderboardModule = (() => {
+  const MEDALS = ["🥇", "🥈", "🥉"];
+
+  /** Build a single leaderboard row */
+  const buildRow = (entry, rank, currentUid) => {
+    const isMe    = entry.uid === currentUid;
+    const medal   = MEDALS[rank] ?? null;
+    const name    = entry.nickname?.trim() || entry.email?.split("@")[0] || "Player";
+    const credits = Math.floor(entry.credits ?? 0);
+
+    const el = document.createElement("div");
+    el.className = "lb-row" + (isMe ? " lb-row-me" : "");
+    el.innerHTML = `
+      <span class="lb-rank">${medal ?? "#" + (rank + 1)}</span>
+      <span class="lb-name" title="${entry.email ?? ""}">${name}${isMe ? " <span class='lb-you'>YOU</span>" : ""}</span>
+      <span class="lb-credits">${credits.toLocaleString()}</span>`;
+    return el;
+  };
+
+  /** Render the full leaderboard list */
+  const render = (entries) => {
+    const list  = $("leaderboard-list");
+    const count = $("lb-user-count");
+    if (!list) return;
+
+    list.innerHTML = "";
+    if (count) count.textContent = `${entries.length} player${entries.length !== 1 ? "s" : ""}`;
+
+    if (entries.length === 0) {
+      list.innerHTML = `<div class="lb-empty">No players yet.</div>`;
+      return;
+    }
+
+    const uid = State.user?.uid;
+    entries.forEach((entry, i) => list.appendChild(buildRow(entry, i, uid)));
+  };
+
+  /** Load from Firestore and render. Also refreshes current user's live credits row. */
+  const load = async () => {
+    const list = $("leaderboard-list");
+    if (list) list.innerHTML = `<div class="lb-loading">Loading…</div>`;
+    try {
+      const entries = await DB.getLeaderboard(20);
+      render(entries);
+    } catch (err) {
+      console.error("Leaderboard load failed:", err);
+      if (list) list.innerHTML = `<div class="lb-empty">Could not load.</div>`;
+    }
+  };
+
+  /**
+   * Refresh just the current user's row after a credit change,
+   * without re-fetching everyone — just re-sort and re-render in memory.
+   */
+  const refreshCurrentUser = () => {
+    // Lightweight: just reload the whole leaderboard (small dataset, fast query)
+    load();
+  };
+
+  return { load, refreshCurrentUser };
+})();
+
+// ═══════════════════════════════════════════════════
+// NICKNAME MODULE
+// Synced across both top-bars (dashboard + game screen)
+// Persisted to Firestore users/{uid}.nickname
+// ═══════════════════════════════════════════════════
+
+const NicknameModule = (() => {
+  // IDs for the two instances (dashboard + game screen)
+  const INSTANCES = [
+    { display: "dash-nickname-display", editBtn: "dash-nickname-edit-btn", input: "dash-nickname-input", saveBtn: "dash-nickname-save-btn" },
+    { display: "game-nickname-display", editBtn: "game-nickname-edit-btn", input: "game-nickname-input", saveBtn: "game-nickname-save-btn" },
+  ];
+
+  // ── Helpers ──────────────────────────────────────
+
+  /** Render the saved name (or placeholder) into all display spans */
+  const renderAll = (nickname) => {
+    INSTANCES.forEach(({ display }) => {
+      const el = $(display);
+      if (!el) return;
+      if (nickname) {
+        el.textContent = nickname;
+        cls.remove(el, "empty");
+      } else {
+        el.textContent = "Set your nickname…";
+        cls.add(el, "empty");
+      }
+    });
+  };
+
+  /** Switch one instance into edit mode */
+  const openEdit = ({ display, editBtn, input, saveBtn }) => {
+    const displayEl = $(display);
+    const editBtnEl = $(editBtn);
+    const inputEl   = $(input);
+    const saveBtnEl = $(saveBtn);
+
+    // Pre-fill with current nickname (not placeholder text)
+    inputEl.value = State.userData?.nickname || "";
+    cls.add(displayEl, "hidden");
+    cls.add(editBtnEl, "hidden");
+    cls.remove(inputEl,   "hidden");
+    cls.remove(saveBtnEl, "hidden");
+    inputEl.focus();
+    inputEl.select();
+  };
+
+  /** Switch one instance back to display mode */
+  const closeEdit = ({ display, editBtn, input, saveBtn }) => {
+    cls.remove($(display),  "hidden");
+    cls.remove($(editBtn),  "hidden");
+    cls.add($(input),   "hidden");
+    cls.add($(saveBtn), "hidden");
+  };
+
+  /** Save nickname to Firestore and update all displays */
+  const save = async ({ display, editBtn, input, saveBtn }) => {
+    const saveBtnEl = $(saveBtn);
+    const inputEl   = $(input);
+    const raw       = inputEl.value.trim();
+
+    // Validate: 1–20 chars, no special abuse
+    if (raw.length === 0) { inputEl.focus(); return; }
+
+    cls.add(saveBtnEl, "saving");
+    saveBtnEl.disabled = true;
+
+    try {
+      State.userData.nickname = raw;
+      await DB.updateNickname(State.user.uid, raw);
+      renderAll(raw);
+      closeEdit({ display, editBtn, input, saveBtn });
+
+      // Flash the saved name on BOTH displays
+      INSTANCES.forEach(({ display: d }) => animateBump($(d), "saved-flash"));
+    } catch (err) {
+      console.error("Nickname save failed:", err);
+    } finally {
+      cls.remove(saveBtnEl, "saving");
+      saveBtnEl.disabled = false;
+    }
+  };
+
+  // ── Public API ────────────────────────────────────
+
+  /** Call once after user data is loaded */
+  const init = (nickname) => {
+    renderAll(nickname);
+
+    INSTANCES.forEach((instance) => {
+      const { display, editBtn, input, saveBtn } = instance;
+
+      // Clicking the display text also opens edit
+      $(display)?.addEventListener("click", () => openEdit(instance));
+      $(editBtn)?.addEventListener("click", () => openEdit(instance));
+
+      // Save on ✓ button
+      $(saveBtn)?.addEventListener("click", () => save(instance));
+
+      // Save on Enter, cancel on Escape
+      $(input)?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter")  { e.preventDefault(); save(instance); }
+        if (e.key === "Escape") { closeEdit(instance); }
+      });
+    });
+  };
+
+  return { init, renderAll };
 })();
 
 // ═══════════════════════════════════════════════════
@@ -599,11 +975,15 @@ const bindEvents = () => {
   $("btn-logout").addEventListener("click",  () => { DailyReward.stopCountdown(); AuthModule.signOut(); });
   $("btn-logout2").addEventListener("click", () => { DailyReward.stopCountdown(); AuthModule.signOut(); });
 
-  $("btn-play-fruit").addEventListener("click", () => {
+  const enterGame = () => {
     Router.goto("screen-game");
     HistoryModule.load(State.user.uid);
+    LeaderboardModule.load();
     DailyReward.updateUI();
-  });
+  };
+
+  // enterGame reloads history every time — covers both first visit and re-entry
+  $("btn-play-fruit").addEventListener("click", enterGame);
 
   $("btn-back").addEventListener("click", () => Router.goto("screen-dashboard"));
 
@@ -631,9 +1011,12 @@ const onUserSignedIn = async (user) => {
   }
 
   CreditsModule.setDisplay(State.userData.credits);
+  NicknameModule.init(State.userData.nickname || "");
   GridModule.render();
   Router.goto("screen-dashboard");
   DailyReward.updateUI();
+  // Pre-warm leaderboard so it's ready when user enters the game
+  LeaderboardModule.load();
 };
 
 const onUserSignedOut = () => {
