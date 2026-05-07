@@ -601,7 +601,7 @@ html, body {
 /* ═══════════════════════════════════════════════════
    RESPONSIVE — ≤380px: stack history BELOW game
    ═══════════════════════════════════════════════════ */
-@media (max-width: 380px) {
+@media (max-width: 500px) {
   .game-layout {
     flex-direction: column;      /* stack vertically */
   }
