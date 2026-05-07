@@ -52,6 +52,102 @@ const GAME_CONFIG = {
   SPIN_DURATION_MS: 4200,
   TICK_MS:          60,
 };
+// ═══════════════════════════════════════════════════
+// POP MATCH PRESETS
+// ═══════════════════════════════════════════════════
+
+const PM_PRESETS = {
+  colors: [
+    {
+      id:      "default",
+      name:    "Arcade Classic",
+      price:   0,
+      free:    true,
+      preview: { cardBorder: "#ff4d6d", matched: "#00b38a", glow: "rgba(255,77,109,0.5)" },
+      desc:    "The original arcade look. Always free.",
+    },
+    {
+      id:      "neon",
+      name:    "Neon Pulse",
+      price:   100,
+      free:    false,
+      preview: { cardBorder: "#00f5d4", matched: "#7b2fff", glow: "rgba(0,245,212,0.5)" },
+      desc:    "Cyan borders, violet matched cards. Electric.",
+    },
+    {
+      id:      "gold",
+      name:    "Golden Hour",
+      price:   150,
+      free:    false,
+      preview: { cardBorder: "#f7c948", matched: "#ff8c00", glow: "rgba(247,201,72,0.5)" },
+      desc:    "All-gold everything. For the top of the leaderboard.",
+    },
+    {
+      id:      "ghost",
+      name:    "Ghost Mode",
+      price:   120,
+      free:    false,
+      preview: { cardBorder: "#a855f7", matched: "#ec4899", glow: "rgba(168,85,247,0.5)" },
+      desc:    "Purple & pink. Hauntingly good.",
+    },
+    {
+      id:      "ice",
+      name:    "Ice Cold",
+      price:   130,
+      free:    false,
+      preview: { cardBorder: "#38bdf8", matched: "#0ea5e9", glow: "rgba(56,189,248,0.5)" },
+      desc:    "Cool blue tones. Keep it frosty.",
+    },
+  ],
+
+  emojis: [
+    {
+      id:      "classic",
+      name:    "Classic Arcade",
+      price:   0,
+      free:    true,
+      symbols: ["👾","🕹️","💎","⚡","👑","🎲","🚀","🔥","🌌","🌀"],
+      desc:    "The original symbol set. Always free.",
+    },
+    {
+      id:      "fruits",
+      name:    "Fruit Frenzy",
+      price:   100,
+      free:    false,
+      symbols: ["🍒","🥭","🍎","🍍","🍫","🍓","🍑","🍇","🍉","🥝"],
+      desc:    "Familiar fruits from the slot machine, now on cards.",
+    },
+    {
+      id:      "animals",
+      name:    "Wild Pack",
+      price:   120,
+      free:    false,
+      symbols: ["🐶","🐱","🦊","🐸","🐧","🦁","🐯","🦋","🐙","🦄"],
+      desc:    "Cute but competitive. Don't let the animals fool you.",
+    },
+    {
+      id:      "space",
+      name:    "Deep Space",
+      price:   150,
+      free:    false,
+      symbols: ["🪐","🌙","⭐","☄️","🛸","🌟","💫","🔭","🎆","🚀"],
+      desc:    "Explore the cosmos one card flip at a time.",
+    },
+    {
+      id:      "food",
+      name:    "Junk Food",
+      price:   100,
+      free:    false,
+      symbols: ["🍕","🍔","🌮","🍜","🍣","🧁","🍩","🍦","🥐","🍿"],
+      desc:    "Chaotic and delicious. Hunger not included.",
+    },
+  ],
+};
+
+const POP_MATCH_CONFIG = {
+  STAGE_REWARDS:   [0, 2, 4, 7, 12, 20], // index = stage number (index 0 unused)
+  DAILY_CAP:       50,                    // max credits earnable from Pop Match per day
+};
 
 // ═══════════════════════════════════════════════════
 // FRUITS CONFIG (Weights for spinning probability)
@@ -271,6 +367,48 @@ const DB = {
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
+  /**
+   * Get how many Pop Match credits this user has earned today.
+   * Stored in users/{uid}.popMatchCreditsToday and popMatchCapDate.
+   */
+  async getPopMatchDailyEarned(uid) {
+    const data = await DB.getUser(uid);
+    if (!data) return 0;
+
+    const capDate = data.popMatchCapDate;
+    if (!capDate) return 0;
+
+    // Reset if the stored date is from a previous day
+    const stored  = capDate.toDate ? capDate.toDate() : new Date(capDate);
+    const todayStr = new Date().toDateString();
+    if (stored.toDateString() !== todayStr) return 0;
+
+    return data.popMatchCreditsToday || 0;
+  },
+
+  /**
+   * Increment the user's Pop Match daily earned counter.
+   * Also stamps the date so it auto-resets the next calendar day.
+   */
+  async incrementPopMatchDailyEarned(uid, amount) {
+    const current = await DB.getPopMatchDailyEarned(uid);
+    await updateDoc(DB.userRef(uid), {
+      popMatchCreditsToday: current + amount,
+      popMatchCapDate:      new Date(),
+    });
+  },
+  async getInventory(uid) {
+    const data = await DB.getUser(uid);
+    return data?.popMatchInventory ?? {
+      ownedPresets: ["default", "classic"],
+      activeColor:  "default",
+      activeEmoji:  "classic",
+    };
+  },
+
+  async saveInventory(uid, inventory) {
+    await updateDoc(DB.userRef(uid), { popMatchInventory: inventory });
+  },
 };
 
 // ═══════════════════════════════════════════════════
@@ -288,7 +426,7 @@ const State = {
 // ═══════════════════════════════════════════════════
 
 const Router = {
-  SCREENS: ["screen-splash", "screen-auth", "screen-dashboard", "screen-game"],
+  SCREENS: ["screen-splash", "screen-auth", "screen-dashboard", "screen-game", "screen-match"],
   goto(id) {
     const splash = $("screen-splash");
 
@@ -776,69 +914,777 @@ const SpinModule = (() => {
 })();
 
 // ═══════════════════════════════════════════════════
+// POP MATCH SHOP MODULE
+// ═══════════════════════════════════════════════════
+
+const ShopModule = (() => {
+  let _inventory = {
+    ownedPresets: ["default", "classic"],
+    activeColor:  "default",
+    activeEmoji:  "classic",
+  };
+
+  // Preview state — null means no preview locked in
+  // "locked" means user clicked to preview (not just hovering)
+  let _preview = {
+    color:  null,   // preset id being previewed
+    emoji:  null,
+    locked: false,  // true = user clicked to lock preview; false = just hovering
+  };
+
+  // ── Init ──────────────────────────────────────────
+
+  const init = async () => {
+    if (!State.user) return;
+    _inventory = await DB.getInventory(State.user.uid);
+    if (!_inventory.ownedPresets.includes("default"))
+      _inventory.ownedPresets.push("default");
+    if (!_inventory.ownedPresets.includes("classic"))
+      _inventory.ownedPresets.push("classic");
+    applyActive();
+  };
+
+  // ── Apply active preset to the board CSS vars ─────
+
+  const applyActive = () => {
+    const colorPreset = PM_PRESETS.colors.find(c => c.id === _inventory.activeColor)
+      ?? PM_PRESETS.colors[0];
+    applyColorPreset(colorPreset.preview);
+  };
+
+  const applyColorPreset = ({ cardBorder, matched, glow }) => {
+    const board = $("pm-board");
+    if (!board) return;
+    board.style.setProperty("--pm-card-border",    cardBorder);
+    board.style.setProperty("--pm-matched-bg",     matched);
+    board.style.setProperty("--pm-matched-border", matched);
+    board.style.setProperty("--pm-card-glow",      glow);
+  };
+
+  const getActiveSymbols = () => {
+    const pack = PM_PRESETS.emojis.find(e => e.id === _inventory.activeEmoji)
+      ?? PM_PRESETS.emojis[0];
+    return pack.symbols;
+  };
+
+  // ── Preview helpers ───────────────────────────────
+
+  /** Hover-only preview (not locked — reverts on mouse leave) */
+  const hoverPreview = (type, presetId) => {
+    if (_preview.locked) return; // don't overwrite a locked preview
+    if (type === "color") {
+      const p = PM_PRESETS.colors.find(c => c.id === presetId);
+      if (p) applyColorPreset(p.preview);
+    }
+    // emoji hover just highlights the card, board update on lock
+    _preview[type] = presetId;
+    renderShopUI();
+  };
+
+  /** Mouse-leave: revert hover preview (only if not locked) */
+  const hoverEnd = () => {
+    if (_preview.locked) return;
+    _preview.color = null;
+    _preview.emoji = null;
+    applyActive(); // revert board to saved preset
+    renderShopUI();
+  };
+
+  /**
+   * Click a preset card:
+   * - If not locked yet → lock this preset as the active preview
+   * - If already locked on THIS preset → same as confirm (buy/equip)
+   * - If locked on a DIFFERENT preset → switch lock to this one
+   */
+  const clickPreset = (type, presetId) => {
+    const alreadyLocked = _preview.locked
+      && ((type === "color" && _preview.color === presetId)
+       || (type === "emoji" && _preview.emoji === presetId));
+
+    if (alreadyLocked) {
+      // Second click on same preset = confirm
+      purchase(type, presetId);
+      return;
+    }
+
+    // Lock the preview
+    _preview.locked = true;
+    if (type === "color") {
+      _preview.color = presetId;
+      const p = PM_PRESETS.colors.find(c => c.id === presetId);
+      if (p) applyColorPreset(p.preview);
+    } else {
+      _preview.emoji = presetId;
+    }
+
+    showShopMsg(
+      "Previewing — click again to buy & equip, or hit Cancel to revert.",
+      "preview"
+    );
+    renderShopUI();
+  };
+
+  /** Cancel button: clear all preview state and revert board */
+  const cancelPreview = () => {
+    _preview = { color: null, emoji: null, locked: false };
+    applyActive();
+    showShopMsg("", "");
+    renderShopUI();
+  };
+
+  // ── Purchase / equip ──────────────────────────────
+
+  const purchase = async (type, presetId) => {
+    const list   = type === "color" ? PM_PRESETS.colors : PM_PRESETS.emojis;
+    const preset = list.find(p => p.id === presetId);
+    if (!preset) return;
+
+    // Already owned → just equip
+    if (_inventory.ownedPresets.includes(presetId)) {
+      await equipPreset(type, presetId);
+      return;
+    }
+
+    // Check credits
+    if (State.userData.credits < preset.price) {
+      showShopMsg("Not enough credits!", "error");
+      return;
+    }
+
+    // Deduct and unlock
+    await CreditsModule.deduct(preset.price);
+    _inventory.ownedPresets.push(presetId);
+    await DB.saveInventory(State.user.uid, _inventory);
+
+    await equipPreset(type, presetId);
+    showShopMsg(`✅ ${preset.name} purchased & equipped!`, "success");
+  };
+
+  const equipPreset = async (type, presetId) => {
+    if (type === "color") _inventory.activeColor = presetId;
+    else                  _inventory.activeEmoji = presetId;
+
+    // Clear all preview state
+    _preview = { color: null, emoji: null, locked: false };
+
+    await DB.saveInventory(State.user.uid, _inventory);
+    applyActive();
+    renderShopUI();
+    showShopMsg(`✅ Preset equipped!`, "success");
+  };
+
+  // ── Shop message toast ────────────────────────────
+
+  const showShopMsg = (text, type = "") => {
+    const el = $("pm-shop-msg");
+    if (!el) return;
+    el.textContent = text;
+    el.className   = `pm-shop-msg ${type}`;
+    // Auto-clear success/error (not preview banners)
+    if (type !== "preview" && text) {
+      setTimeout(() => { if (el.textContent === text) el.textContent = ""; }, 2800);
+    }
+  };
+
+  // ── Render the full shop UI ───────────────────────
+
+  const renderShopUI = () => {
+    renderSection("color");
+    renderSection("emoji");
+
+    // Update credits display inside shop
+    const credEl = $("pm-shop-credits");
+    if (credEl) credEl.textContent = Math.floor(State.userData?.credits ?? 0);
+
+    // Show/hide the cancel-preview bar
+    const bar = $("pm-shop-preview-bar");
+    if (bar) bar.classList.toggle("hidden", !_preview.locked);
+  };
+
+  const renderSection = (type) => {
+    const container = $(`pm-shop-${type}-grid`);
+    if (!container) return;
+    container.innerHTML = "";
+
+    const list      = type === "color" ? PM_PRESETS.colors : PM_PRESETS.emojis;
+    const activeId  = type === "color" ? _inventory.activeColor : _inventory.activeEmoji;
+    const previewId = type === "color" ? _preview.color : _preview.emoji;
+
+    list.forEach(preset => {
+      const owned     = _inventory.ownedPresets.includes(preset.id);
+      const isActive  = preset.id === activeId;
+      const isPrev    = preset.id === previewId && _preview.locked;
+      const isHovered = preset.id === previewId && !_preview.locked;
+
+      const card = document.createElement("div");
+      card.className = [
+        "pm-shop-card",
+        isActive  ? "pm-shop-card-active"   : "",
+        isPrev    ? "pm-shop-card-preview"  : "",
+        isHovered ? "pm-shop-card-hovering" : "",
+        !owned    ? "pm-shop-card-locked"   : "",
+      ].filter(Boolean).join(" ");
+
+      // Color swatch or emoji grid preview
+      const visual = type === "color"
+        ? `<div class="pm-shop-swatch" style="
+              border-color:${preset.preview.cardBorder};
+              box-shadow: 0 0 12px ${preset.preview.glow};
+           ">
+             <div class="pm-shop-swatch-inner" style="background:${preset.preview.matched}"></div>
+           </div>`
+        : `<div class="pm-shop-emoji-preview">
+             ${preset.symbols.slice(0, 6).map(s => `<span>${s}</span>`).join("")}
+           </div>`;
+
+      // Badge logic
+      let badge = "";
+      if (isActive) {
+        badge = `<span class="pm-shop-badge equipped">✓ EQUIPPED</span>`;
+      } else if (isPrev) {
+        badge = `<span class="pm-shop-badge previewing">👁 PREVIEWING</span>`;
+      } else if (owned) {
+        badge = `<span class="pm-shop-badge owned">OWNED</span>`;
+      } else if (preset.free) {
+        badge = `<span class="pm-shop-badge free">FREE</span>`;
+      } else {
+        badge = `<span class="pm-shop-badge price">💰 ${preset.price} cr</span>`;
+      }
+
+      // Hint text under the badge when locked in preview
+      const hint = isPrev
+        ? `<span class="pm-shop-click-hint">Click again to confirm</span>`
+        : "";
+
+      card.innerHTML = `
+        ${visual}
+        <div class="pm-shop-card-info">
+          <span class="pm-shop-card-name">${preset.name}</span>
+          <span class="pm-shop-card-desc">${preset.desc}</span>
+          ${badge}
+          ${hint}
+        </div>`;
+
+      // Hover = temporary live preview (color only; emoji just highlights)
+      card.addEventListener("mouseenter", () => hoverPreview(type, preset.id));
+      card.addEventListener("mouseleave", hoverEnd);
+
+      // Click = lock preview
+      card.addEventListener("click", () => clickPreset(type, preset.id));
+
+      container.appendChild(card);
+    });
+  };
+
+  // ── Modal open / close ────────────────────────────
+
+  const open = async () => {
+    await init();
+    renderShopUI();
+    const modal   = $("pm-shop-modal");
+    const overlay = $("pm-shop-overlay");
+    if (modal) {
+      cls.remove(modal, "hidden");
+      requestAnimationFrame(() => {
+        cls.add(modal,   "open");
+        cls.add(overlay, "open");
+      });
+      switchShopTab("color");
+    }
+  };
+
+  const close = () => {
+    cancelPreview();
+    const modal   = $("pm-shop-modal");
+    const overlay = $("pm-shop-overlay");
+    cls.remove(modal,   "open");
+    cls.remove(overlay, "open");
+    setTimeout(() => cls.add(modal, "hidden"), 280);
+  };
+
+  const switchShopTab = (tab) => {
+    ["color", "emoji"].forEach(t => {
+      $(`pm-shop-tab-${t}`)?.classList.toggle("lb-tab-active", t === tab);
+      $(`pm-shop-section-${t}`)?.classList.toggle("hidden",    t !== tab);
+    });
+  };
+
+  return { open, close, init, getActiveSymbols, applyActive, switchShopTab, renderShopUI };
+})();
+
+// ═══════════════════════════════════════════════════
+// POP MATCH MODULE
+// ═══════════════════════════════════════════════════
+
+class PopMatchGame {
+  constructor() {
+    // All DOM lookups use pm- prefixed IDs
+    this.board       = $("pm-board");
+    this.timerEl     = $("pm-timer");
+    this.scoreEl     = $("pm-score");
+    this.highScoreEl = $("pm-highScore");
+    this.comboEl     = $("pm-combo");
+    this.messageEl   = $("pm-message");
+    this.stageEl     = $("pm-stageNum");
+    this.mainBtn     = $("pm-mainBtn");
+
+    // this.symbols = ["👾","🕹️","💎","⚡","👑","🎲","🚀","🔥","🌌","🌀"];
+    this.symbols = ShopModule.getActiveSymbols();
+    this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    this.currentStage = 1;
+    this.maxStages    = 5;
+
+    this.state = {
+      firstCard: null, secondCard: null,
+      lockBoard: false,
+      score: 0, combo: 0, matches: 0,
+      timer: 60, interval: null, running: false
+    };
+    this.isProcessing = false;
+  }
+
+  /** Called by Router each time the screen is entered */
+  mount() {
+    this.symbols = ShopModule.getActiveSymbols(); // refresh symbols on each entry
+    ShopModule.applyActive();                     // apply saved color preset
+    this.resetFullGame();
+    this.createBoard();
+    this.bindEvents();
+    this.loadHighScore();
+    this.updateButtonState();
+  }
+
+  /** Called by Router when leaving the screen — stops the timer */
+  unmount() {
+    clearInterval(this.state.interval);
+    this.state.running = false;
+    // Remove the mainBtn listener to avoid stacking on re-entry
+    this.mainBtn.replaceWith(this.mainBtn.cloneNode(true));
+    this.mainBtn = $("pm-mainBtn");
+  }
+
+  bindEvents() {
+    // replaceWith above ensures only one listener exists at a time
+    this.mainBtn.addEventListener("click", () => {
+      if (!this.state.running && !this.isProcessing) this.startNewGame();
+    });
+  }
+
+  getStageConfig(stage) {
+    return {
+      pairs: 4 + (stage - 1) * 2,
+      time:  Math.max(35, 68 - stage * 5),
+      cols:  stage >= 4 ? 5 : 4
+    };
+  }
+
+  shuffle(array) { return array.sort(() => Math.random() - 0.5); }
+
+  createBoard() {
+    this.board.innerHTML = "";
+    const config = this.getStageConfig(this.currentStage);
+    this.board.style.gridTemplateColumns = `repeat(${config.cols}, 1fr)`;
+
+    const selected = this.symbols.slice(0, config.pairs);
+    this.shuffle([...selected, ...selected]).forEach(symbol => {
+      const card = document.createElement("div");
+      card.className    = "pm-card";          // ← pm- prefix
+      card.dataset.symbol = symbol;
+      card.textContent  = "?";
+      card.addEventListener("click", () => this.onCardClick(card));
+      this.board.appendChild(card);
+    });
+  }
+
+  onCardClick(card) {
+    if (!this.state.running || this.state.lockBoard || this.isProcessing ||
+        card.classList.contains("matched") || card === this.state.firstCard) return;
+
+    this.playSound("flip");
+    this.revealCard(card);
+
+    if (!this.state.firstCard) { this.state.firstCard = card; return; }
+    this.state.secondCard = card;
+    this.validateMatch();
+  }
+
+  revealCard(card) { card.textContent = card.dataset.symbol; card.classList.add("revealed"); }
+  hideCard(card)   { if (card) { card.textContent = "?"; card.classList.remove("revealed"); } }
+
+  validateMatch() {
+    this.isProcessing = true;
+    this.state.lockBoard = true;
+    const isMatch = this.state.firstCard.dataset.symbol === this.state.secondCard.dataset.symbol;
+    isMatch ? this.handleMatch() : this.handleMismatch();
+  }
+
+  handleMatch() {
+    this.state.matches++;
+    this.state.combo++;
+    const points = this.state.combo * 12;
+    this.state.score += points;
+    this.updateUI();
+    this.playSound("match");
+    this.state.firstCard.classList.add("matched");
+    this.state.secondCard.classList.add("matched");
+    this.showMessage(`+${points}`, "success");
+    this.resetTurn();
+    const config = this.getStageConfig(this.currentStage);
+    if (this.state.matches === config.pairs) this.completeStage();
+    else this.isProcessing = false;
+  }
+
+  handleMismatch() {
+    this.playSound("miss");
+    this.showMessage("MISS!");
+    setTimeout(() => {
+      this.hideCard(this.state.firstCard);
+      this.hideCard(this.state.secondCard);
+      this.resetTurn();
+      this.isProcessing = false;
+    }, 680);
+  }
+
+  resetTurn() {
+    this.state.firstCard = null;
+    this.state.secondCard = null;
+    this.state.lockBoard = false;
+  }
+
+  async completeStage() {
+    this.state.running = false;
+    this.isProcessing  = true;
+    this.updateButtonState();
+
+    // ── Score bonus (cosmetic, not credits) ──────────
+    const bonus = this.currentStage * 150;
+    this.state.score += bonus;
+    this.updateUI();
+    this.playSound("win");
+
+    // ── Credit reward for clearing this stage ────────
+    await this._awardStageCredits(this.currentStage);
+
+    this.showMessage(`STAGE ${this.currentStage} CLEAR! +${bonus} pts`, "success");
+
+    setTimeout(() => {
+      if (this.currentStage < this.maxStages) { this.currentStage++; this.startNextStage(); }
+      else this.endGame(true);
+    }, 1600);
+  }
+
+  /**
+   * Awards credits for clearing a stage, respecting the daily cap.
+   * Shows a toast in the result message and updates the credits display.
+   * Silent no-op if the user is not signed in or cap is already reached.
+   */
+  async _awardStageCredits(stage) {
+    if (!State.user || !State.userData) return;
+
+    const reward   = POP_MATCH_CONFIG.STAGE_REWARDS[stage] ?? 0;
+    if (reward <= 0) return;
+
+    const earned   = await DB.getPopMatchDailyEarned(State.user.uid);
+    const canEarn  = POP_MATCH_CONFIG.DAILY_CAP - earned;
+
+    if (canEarn <= 0) {
+      // Cap reached — show a soft message but don't break the game flow
+      setTimeout(() =>
+        this.showMessage(`Stage ${stage} clear! (Daily cap reached)`, ""), 200);
+      return;
+    }
+
+    const actual = Math.min(reward, canEarn);
+
+    // Update credits via the shared module (writes to Firestore + updates UI)
+    await CreditsModule.add(actual);
+
+    // Update the Pop Match credits display in the top bar
+    $("match-credits").textContent = Math.floor(State.userData.credits);
+
+    // Record against the daily cap
+    await DB.incrementPopMatchDailyEarned(State.user.uid, actual);
+
+    const capNote = actual < reward ? ` (cap: +${actual})` : "";
+    setTimeout(() =>
+      this.showMessage(`+${actual} credits earned!${capNote}`, "success"), 200);
+  }
+
+  startNewGame()  { this.resetFullGame(); this.startNextStage(); }
+
+  resetFullGame() {
+    clearInterval(this.state.interval);
+    this.currentStage = 1;
+    this.stageEl.textContent = "1";
+    Object.assign(this.state, { score: 0, combo: 0, matches: 0, running: false });
+    this.isProcessing = false;
+    this.updateUI();
+  }
+
+  startNextStage() {
+    const config = this.getStageConfig(this.currentStage);
+    Object.assign(this.state, { timer: config.time, matches: 0, combo: 0 });
+    this.stageEl.textContent = this.currentStage;
+    this.updateUI();
+    this.createBoard();
+    this.state.running = true;
+    this.isProcessing  = false;
+    this.updateButtonState();
+    this.startTimer();
+  }
+
+  startTimer() {
+    clearInterval(this.state.interval);
+    this.state.interval = setInterval(() => {
+      if (!this.state.running) return;
+      this.state.timer--;
+      this.timerEl.textContent = this.state.timer;
+      if (this.state.timer <= 0) this.endGame(false);
+    }, 1000);
+  }
+
+  endGame(win) {
+    clearInterval(this.state.interval);
+    this.state.running = false;
+    this.isProcessing  = false;
+    this.updateButtonState();
+    this.saveHighScore();
+
+    if (win) {
+      // Full clear already paid out per-stage — just celebrate
+      this.showMessage("GAME COMPLETE! LEGEND! 🎉", "success");
+      this.playSound("win");
+    } else {
+      this.showMessage("TIME'S UP! No credits for incomplete stages.", "error");
+      this.playSound("lose");
+    }
+  }
+
+  updateUI() {
+    this.scoreEl.textContent = this.state.score;
+    this.comboEl.textContent = `x${this.state.combo}`;
+    this.timerEl.textContent = this.state.timer;
+  }
+
+  updateButtonState() {
+    const fresh = this.currentStage === 1 && this.state.score === 0;
+    this.mainBtn.textContent = this.state.running ? "GAME IN PROGRESS" : (fresh ? "START GAME" : "PLAY AGAIN");
+    this.mainBtn.disabled    = this.state.running;
+  }
+
+  saveHighScore() {
+      const current = Number(localStorage.getItem("pop-highscore")) || 0;
+      if (this.state.score > current) {
+        localStorage.setItem("pop-highscore", this.state.score);
+        this.loadHighScore();
+
+        // Persist to Firestore so it appears on the dashboard leaderboard
+        if (State.user) {
+          updateDoc(DB.userRef(State.user.uid), {
+            popMatchHighScore: this.state.score
+          }).catch(err => console.warn("High score save failed:", err));
+        }
+      }
+    }
+
+loadHighScore() {
+    // Prefer the Firestore value (set during mount) over localStorage
+    const stored = State.userData?.popMatchHighScore
+      || Number(localStorage.getItem("pop-highscore"))
+      || 0;
+    // Sync localStorage to whatever is highest
+    const local = Number(localStorage.getItem("pop-highscore")) || 0;
+    if (stored > local) localStorage.setItem("pop-highscore", stored);
+    this.highScoreEl.textContent = Math.max(stored, local);
+  }
+
+  showMessage(text, type = "") {
+    this.messageEl.textContent = text;
+    this.messageEl.className   = `pm-message ${type}`;
+    setTimeout(() => { if (this.messageEl.textContent === text) this.messageEl.textContent = ""; }, 2200);
+  }
+
+  playSound(type) {
+    try {
+      const ctx  = this.audioCtx;
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      switch (type) {
+        case "flip":
+          osc.type = "sawtooth"; osc.frequency.value = 900; gain.gain.value = 0.12;
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+          osc.start(); osc.stop(ctx.currentTime + 0.15); break;
+        case "match":
+          osc.type = "sine"; osc.frequency.setValueAtTime(1100, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 0.35);
+          gain.gain.value = 0.3; gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+          osc.start(); osc.stop(ctx.currentTime + 0.4); break;
+        case "miss":
+          osc.type = "square"; osc.frequency.value = 420; gain.gain.value = 0.2;
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+          osc.start(); osc.stop(ctx.currentTime + 0.45); break;
+        case "win":
+          [1200,1500,1800,2200].forEach((f,i) => setTimeout(() => {
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = "sine"; o.frequency.value = f; g.gain.value = 0.25;
+            o.connect(g); g.connect(ctx.destination); o.start();
+            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+            o.stop(ctx.currentTime + 0.6);
+          }, i * 70)); break;
+        case "lose":
+          osc.type = "sawtooth"; osc.frequency.setValueAtTime(650, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.9);
+          gain.gain.value = 0.25; gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9);
+          osc.start(); osc.stop(ctx.currentTime + 0.9); break;
+      }
+    } catch(e) {}
+  }
+}
+
+// Single instance — created once, mounted/unmounted by Router
+const popMatch = new PopMatchGame();
+
+// ═══════════════════════════════════════════════════
 // LEADERBOARD MODULE
+// Renders on dashboard (#dash-leaderboard-list)
+// and on fruit game sidebar (#leaderboard-list)
 // ═══════════════════════════════════════════════════
 
 const LeaderboardModule = (() => {
   const MEDALS = ["🥇", "🥈", "🥉"];
+  let _activeTab = "credits"; // "credits" | "popmatch"
 
-  /** Build a single leaderboard row */
-  const buildRow = (entry, rank, currentUid) => {
+  // ── Data fetching ─────────────────────────────────
+
+  const fetchCredits = () => DB.getLeaderboard(20);
+
+  const fetchPopMatch = async () => {
+    const q = query(
+      collection(db, "users"),
+      orderBy("popMatchHighScore", "desc"),
+      limit(20)
+    );
+    const snap = await getDocs(q);
+    return snap.docs
+      .map(d => ({ uid: d.id, ...d.data() }))
+      .filter(d => (d.popMatchHighScore ?? 0) > 0);
+  };
+
+  // ── Row builders ──────────────────────────────────
+
+  const buildCreditsRow = (entry, rank, currentUid) => {
     const isMe    = entry.uid === currentUid;
     const medal   = MEDALS[rank] ?? null;
     const name    = entry.nickname?.trim() || entry.email?.split("@")[0] || "Player";
     const credits = Math.floor(entry.credits ?? 0);
-
-    const el = document.createElement("div");
-    el.className = "lb-row" + (isMe ? " lb-row-me" : "");
-    el.innerHTML = `
+    const el      = document.createElement("div");
+    el.className  = "lb-row" + (isMe ? " lb-row-me" : "");
+    el.innerHTML  = `
       <span class="lb-rank">${medal ?? "#" + (rank + 1)}</span>
       <span class="lb-name" title="${entry.email ?? ""}">${name}${isMe ? " <span class='lb-you'>YOU</span>" : ""}</span>
       <span class="lb-credits">${credits.toLocaleString()}</span>`;
     return el;
   };
 
-  /** Render the full leaderboard list */
-  const render = (entries) => {
-    const list  = $("leaderboard-list");
-    const count = $("lb-user-count");
-    if (!list) return;
+  const buildPopMatchRow = (entry, rank, currentUid) => {
+    const isMe  = entry.uid === currentUid;
+    const medal = MEDALS[rank] ?? null;
+    const name  = entry.nickname?.trim() || entry.email?.split("@")[0] || "Player";
+    const score = Math.floor(entry.popMatchHighScore ?? 0);
+    const el    = document.createElement("div");
+    el.className = "lb-row" + (isMe ? " lb-row-me" : "");
+    el.innerHTML = `
+      <span class="lb-rank">${medal ?? "#" + (rank + 1)}</span>
+      <span class="lb-name" title="${entry.email ?? ""}">${name}${isMe ? " <span class='lb-you'>YOU</span>" : ""}</span>
+      <span class="lb-credits">${score.toLocaleString()} <span class="lb-pts">pts</span></span>`;
+    return el;
+  };
 
-    list.innerHTML = "";
-    if (count) count.textContent = `${entries.length} player${entries.length !== 1 ? "s" : ""}`;
+  // ── Core render — writes to a given list element ──
 
+  const renderInto = (listEl, entries, tab, currentUid) => {
+    listEl.innerHTML = "";
     if (entries.length === 0) {
-      list.innerHTML = `<div class="lb-empty">No players yet.</div>`;
+      listEl.innerHTML = `<div class="lb-empty">${
+        tab === "popmatch" ? "No scores yet." : "No players yet."
+      }</div>`;
       return;
     }
-
-    const uid = State.user?.uid;
-    entries.forEach((entry, i) => list.appendChild(buildRow(entry, i, uid)));
+    entries.forEach((entry, i) => {
+      listEl.appendChild(
+        tab === "popmatch"
+          ? buildPopMatchRow(entry, i, currentUid)
+          : buildCreditsRow(entry, i, currentUid)
+      );
+    });
   };
 
-  /** Load from Firestore and render. Also refreshes current user's live credits row. */
-  const load = async () => {
-    const list = $("leaderboard-list");
-    if (list) list.innerHTML = `<div class="lb-loading">Loading…</div>`;
+  // ── Render to ALL visible leaderboard containers ──
+
+  const renderAll = (entries, tab) => {
+    const uid   = State.user?.uid;
+    const lists = [
+      $("dash-leaderboard-list"),   // dashboard
+      $("leaderboard-list"),        // fruit game sidebar
+    ].filter(Boolean);
+    lists.forEach(el => renderInto(el, entries, tab, uid));
+  };
+
+  // ── Tab switcher (dashboard only) ─────────────────
+
+  const switchTab = async (tab) => {
+    _activeTab = tab;
+
+    // Update tab button states on dashboard
+    ["credits", "popmatch"].forEach(t => {
+      const btn = $(`lb-tab-${t}`);
+      if (btn) btn.classList.toggle("lb-tab-active", t === tab);
+    });
+
+    // Update count label
+    await load(tab);
+  };
+
+  // ── Public: load and render ───────────────────────
+
+  const load = async (tab = _activeTab) => {
+    // Set loading state in all containers
+    [$("dash-leaderboard-list"), $("leaderboard-list")]
+      .filter(Boolean)
+      .forEach(el => el.innerHTML = `<div class="lb-loading">Loading…</div>`);
+
+    // Update player count label (dashboard only)
+    const countEl = $("dash-lb-user-count");
+
     try {
-      const entries = await DB.getLeaderboard(20);
-      render(entries);
+      const entries = tab === "popmatch"
+        ? await fetchPopMatch()
+        : await fetchCredits();
+
+      if (countEl) countEl.textContent =
+        `${entries.length} player${entries.length !== 1 ? "s" : ""}`;
+
+      renderAll(entries, tab);
     } catch (err) {
       console.error("Leaderboard load failed:", err);
-      if (list) list.innerHTML = `<div class="lb-empty">Could not load.</div>`;
+      [$("dash-leaderboard-list"), $("leaderboard-list")]
+        .filter(Boolean)
+        .forEach(el => el.innerHTML = `<div class="lb-empty">Could not load.</div>`);
     }
   };
 
-  /**
-   * Refresh just the current user's row after a credit change,
-   * without re-fetching everyone — just re-sort and re-render in memory.
-   */
-  const refreshCurrentUser = () => {
-    // Lightweight: just reload the whole leaderboard (small dataset, fast query)
-    load();
+  const refreshCurrentUser = () => load();
+
+  // ── Tab button wiring (called once after DOM ready) ─
+
+  const bindTabs = () => {
+    $("lb-tab-credits")?.addEventListener("click",  () => switchTab("credits"));
+    $("lb-tab-popmatch")?.addEventListener("click", () => switchTab("popmatch"));
   };
 
-  return { load, refreshCurrentUser };
+  return { load, refreshCurrentUser, bindTabs };
 })();
 
 // ═══════════════════════════════════════════════════
@@ -1003,10 +1849,44 @@ const bindEvents = () => {
   // enterGame reloads history every time — covers both first visit and re-entry
   $("btn-play-fruit").addEventListener("click", enterGame);
 
+    // ADD these two lines right after it:
+  $("btn-play-match").addEventListener("click", () => {
+    Router.goto("screen-match");
+    popMatch.mount();
+    // Keep nickname display in sync
+    $("match-nickname-display").textContent =
+      State.userData?.nickname || State.user?.email?.split("@")[0] || "";
+    $("match-credits").textContent = Math.floor(State.userData?.credits ?? 0);
+  });
+
+  $("btn-back-match").addEventListener("click", () => {
+    popMatch.unmount();
+    Router.goto("screen-dashboard");
+  });
+
   $("btn-back").addEventListener("click", () => Router.goto("screen-dashboard"));
 
   // Single listener — SpinModule.spin() handles all its own locking internally
   $("btn-spin").addEventListener("click", SpinModule.spin);
+  LeaderboardModule.bindTabs();
+
+  // Shop button
+  $("pm-shop-btn")?.addEventListener("click", () => ShopModule.open());
+  $("pm-shop-close")?.addEventListener("click", () => ShopModule.close());
+  $("pm-shop-overlay")?.addEventListener("click", () => ShopModule.close());
+
+  // Shop tabs
+  $("pm-shop-tab-color")?.addEventListener("click", () => ShopModule.switchShopTab("color"));
+  $("pm-shop-tab-emoji")?.addEventListener("click", () => ShopModule.switchShopTab("emoji"));
+  $("pm-shop-preview-confirm")?.addEventListener("click", () => {
+    // click the currently previewing card to trigger the "second click = confirm" logic
+    document.querySelector(".pm-shop-card-preview")?.click();
+  });
+  $("pm-shop-preview-cancel")?.addEventListener("click", () => {
+    // Need to expose cancelPreview — add it to the return object in ShopModule:
+    // return { open, close, init, getActiveSymbols, applyActive, switchShopTab, renderShopUI, cancelPreview };
+    ShopModule.cancelPreview();
+  });
 };
 
 // ═══════════════════════════════════════════════════
