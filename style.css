@@ -524,6 +524,42 @@ html, body {
   transition: background .2s;
 }
 
+/* DAILY REWARDS */
+/* ── DAILY REWARD CLAIM BUTTON ────────────────────── */
+.btn-claim-reward {
+  background: var(--accent);
+  color: #0a0a12;
+  border-color: var(--accent);
+  outline: 1px solid var(--accent2);
+  animation: claimPulse 1.8s ease-in-out infinite;
+}
+.btn-claim-reward:hover:not(:disabled) {
+  background: #ffd95c;
+  color: #0a0a12;
+  border-color: #ffd95c;
+  animation: none;
+}
+
+@keyframes claimPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(247,201,72,.4); }
+  50%       { box-shadow: 0 0 24px rgba(247,201,72,.9), 0 0 48px rgba(247,201,72,.4); }
+}
+
+.daily-reward {
+  margin-top: .5em;
+  margin-bottom: 1.5em;
+  display: flex;
+  gap: .5em;
+  flex-direction: column;
+  /* border: 1px solid red; */
+  justify-content: center;
+}
+.daily-waiting {
+  text-align: right;
+  align-self: flex-end;
+  /* border: 1px solid red; */
+  width: 100%;
+}
 /* Today stats block */
 .stat-day-block {
   padding: 10px 14px 8px;
