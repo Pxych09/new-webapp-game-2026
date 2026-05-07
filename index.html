@@ -99,6 +99,174 @@
           <button class="btn" disabled>Coming Soon</button>
         </div>
       </div>
+
+        <!-- ═══════════════════════════════════════════════════
+     ABOUT THE GAMES — place this inside <main class="dashboard">
+     after the .game-cards div
+     ═══════════════════════════════════════════════════ -->
+
+    <section class="about-section">
+      <h2 class="about-heading">ABOUT THE GAMES</h2>
+
+      <!-- ── GAME 1: FRUIT GAME ── -->
+      <article class="about-card" id="about-fruit-game">
+        <div class="about-card-header">
+          <div class="about-card-num">01</div>
+          <div class="about-card-title-wrap">
+            <span class="about-card-icon">🎰</span>
+            <div>
+              <h3 class="about-card-title">Fruit Game</h3>
+              <span class="about-card-tag">Free to Play · Luck-Based · Arcade</span>
+            </div>
+          </div>
+          <span class="about-card-status live">LIVE</span>
+        </div>
+
+        <p class="about-card-desc">
+          A retro arcade slot game where luck is everything. Sign in with Google, grab your
+          <strong>100 free starting credits</strong>, and start spinning. Each spin costs
+          <strong>5 credits</strong> — land on a fruit to collect its value, or hit a 💣 bomb
+          and walk away with nothing. Simple. Addictive. Free.
+        </p>
+
+        <div class="about-mechanic-grid">
+          <div class="about-mechanic about-mechanic-outline">
+            <div>
+              <span class="mechanic-label">What keeps it fun</span>
+              <span class="mechanic-text"><strong>The Tension Loop</strong> — every spin costs 5 but most wins return less than 5, so your credits slowly drain unless you hit a pineapple or better. That pressure is what makes each spin feel meaningful. You're always one good spin away from recovering.</span>
+              <br>
+              <span class="mechanic-text"><strong>The Jackpot Moment</strong> — landing 🍫 at ₱100 for a 5-credit bet is a 20x return. It's rare enough to feel genuinely exciting when it happens.</span>
+              <br>
+              <span class="mechanic-text"><strong>The Bomb</strong> — losing everything on a spin feels worse than gaining the equivalent feels good. That asymmetry is what makes the bomb psychologically effective without being unfair.</span>
+              <br>
+              <span class="mechanic-text"><strong>Daily Rewards</strong> — every 24 hours players get +100 free credits, meaning even if they go broke they can come back tomorrow. This removes frustration and keeps people returning.</span>
+              <br>
+              <span class="mechanic-text"><strong>The Leaderboard</strong> — credits accumulate globally, so there's a social layer. Players can see where they rank against everyone else, giving long-term motivation beyond individual spins.</span>
+            </div>
+          </div>
+          <div class="about-mechanic about-mechanic-outline">
+            <div>
+              <span class="mechanic-label">The core design philosophy 🧿</span>
+              <span class="mechanic-text">The game is built around low barrier, high replayability. Sign in once with Google, get credits instantly, start spinning. No tutorials, no menus, no friction. The spin animation (~4 seconds of the highlight traveling around the grid) builds anticipation without feeling slow. The sound design — ticks during the spin, a win tone, a low bomb sound — adds sensory feedback that makes outcomes feel satisfying or dramatic.</span>
+              <br>
+              <span class="mechanic-text">It's essentially a modern retro slot machine — the aesthetic (Bungee font, dark arcade palette, glowing cells) evokes classic arcade machines, but it runs entirely in the browser with real-time data synced to Firestore, so your credits, history, and leaderboard rank are persistent across devices and sessions.</span>
+            </div>
+          </div>
+          <div class="about-mechanic about-mechanic-outline">
+            <div>
+              <span class="mechanic-label">Who it's for</span>
+              <span class="mechanic-text">Anyone who enjoys casual games with a luck element — the kind you play for 5 minutes during a break. It's not skill-based, which lowers the entry barrier completely. The ₱ currency framing gives it a sense of real stakes without actual money involved.</span>
+            </div>
+          </div>
+          <div class="about-mechanic">
+            <span class="mechanic-icon">🎯</span>
+            <div>
+              <span class="mechanic-label">How to Win</span>
+              <span class="mechanic-text">The highlight travels the border grid and stops on a random fruit. Its value is added to your credits.</span>
+            </div>
+          </div>
+          <div class="about-mechanic">
+            <span class="mechanic-icon">⚖️</span>
+            <div>
+              <span class="mechanic-label">Weighted Odds</span>
+              <span class="mechanic-text">Not all fruits are equal. Cherries are common, the jackpot bar is rare. Every spin is a calculated gamble.</span>
+            </div>
+          </div>
+          <div class="about-mechanic">
+            <span class="mechanic-icon">🎁</span>
+            <div>
+              <span class="mechanic-label">Daily Rewards</span>
+              <span class="mechanic-text">Claim +100 free credits every 24 hours. Go broke? Come back tomorrow — the game always gives you another shot.</span>
+            </div>
+          </div>
+          <div class="about-mechanic">
+            <span class="mechanic-icon">🏆</span>
+            <div>
+              <span class="mechanic-label">Leaderboard</span>
+              <span class="mechanic-text">Your credits persist globally. Climb the ranks, hold the top spot, and let everyone know who spins best.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fruit prize table -->
+        <div class="about-prizes">
+          <span class="about-prizes-label">PRIZE TABLE</span>
+          <div class="prize-row">
+            <span class="prize-fruit">🍒</span><span class="prize-name">Cherry</span>
+            <div class="prize-bar-wrap"><div class="prize-bar" style="--w:45%"></div></div>
+            <span class="prize-val">₱1</span>
+            <span class="prize-odds">Common</span>
+          </div>
+          <div class="prize-row">
+            <span class="prize-fruit">🥭</span><span class="prize-name">Mango</span>
+            <div class="prize-bar-wrap"><div class="prize-bar" style="--w:18%"></div></div>
+            <span class="prize-val">₱3</span>
+            <span class="prize-odds">Uncommon</span>
+          </div>
+          <div class="prize-row">
+            <span class="prize-fruit">🍎</span><span class="prize-name">Apple</span>
+            <div class="prize-bar-wrap"><div class="prize-bar" style="--w:15%"></div></div>
+            <span class="prize-val">₱5</span>
+            <span class="prize-odds">Uncommon</span>
+          </div>
+          <div class="prize-row">
+            <span class="prize-fruit">🍍</span><span class="prize-name">Pineapple</span>
+            <div class="prize-bar-wrap"><div class="prize-bar" style="--w:12%"></div></div>
+            <span class="prize-val">₱10</span>
+            <span class="prize-odds">Rare</span>
+          </div>
+          <div class="prize-row jackpot-row">
+            <span class="prize-fruit">🍫</span><span class="prize-name">Jackpot Bar</span>
+            <div class="prize-bar-wrap"><div class="prize-bar jackpot-bar" style="--w:3%"></div></div>
+            <span class="prize-val jackpot-val">₱100</span>
+            <span class="prize-odds jackpot-odds">Jackpot</span>
+          </div>
+          <div class="prize-row bomb-row">
+            <span class="prize-fruit">💣</span><span class="prize-name">Bomb</span>
+            <div class="prize-bar-wrap"><div class="prize-bar bomb-bar" style="--w:7%"></div></div>
+            <span class="prize-val bomb-val">₱0</span>
+            <span class="prize-odds bomb-odds">Danger</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- ── GAME 2: LUCKY BALL (coming soon) ── -->
+      <article class="about-card about-card-soon">
+        <div class="about-card-header">
+          <div class="about-card-num">02</div>
+          <div class="about-card-title-wrap">
+            <span class="about-card-icon">🎱</span>
+            <div>
+              <h3 class="about-card-title">Lucky Ball</h3>
+              <span class="about-card-tag">Coming Soon · Physics-Based</span>
+            </div>
+          </div>
+          <span class="about-card-status soon">SOON</span>
+        </div>
+        <p class="about-card-desc">
+          Roll your luck on the ball table. Details dropping soon — stay tuned and keep your credits ready.
+        </p>
+      </article>
+
+      <!-- ── GAME 3: CARD FLIP (coming soon) ── -->
+      <article class="about-card about-card-soon">
+        <div class="about-card-header">
+          <div class="about-card-num">03</div>
+          <div class="about-card-title-wrap">
+            <span class="about-card-icon">🃏</span>
+            <div>
+              <h3 class="about-card-title">Card Flip</h3>
+              <span class="about-card-tag">Coming Soon · Memory-Based</span>
+            </div>
+          </div>
+          <span class="about-card-status soon">SOON</span>
+        </div>
+        <p class="about-card-desc">
+          Flip cards and match to win big. A game of memory, patience, and a little bit of luck.
+        </p>
+      </article>
+    </section>
+      
     </main>
   </div>
 
