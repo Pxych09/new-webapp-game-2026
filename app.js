@@ -707,12 +707,19 @@ const SpinModule = (() => {
     const ticks        = Math.floor(GAME_CONFIG.SPIN_DURATION_MS / GAME_CONFIG.TICK_MS);
     const winningFruit = getWeightedFruit();
 
-    let winnerIdx = borders.find(idx =>
+    // let winnerIdx = borders.find(idx =>
+    //   GridModule.getFruitAt(idx).emoji === winningFruit.emoji
+    // );
+    // if (winnerIdx === undefined) {
+    //   winnerIdx = borders[Math.floor(Math.random() * borders.length)];
+    // }
+
+    const matchingIndices = borders.filter(idx =>
       GridModule.getFruitAt(idx).emoji === winningFruit.emoji
     );
-    if (winnerIdx === undefined) {
-      winnerIdx = borders[Math.floor(Math.random() * borders.length)];
-    }
+
+    const winnerIdx =
+      matchingIndices[Math.floor(Math.random() * matchingIndices.length)];
 
     for (let t = 0; t < ticks; t++) {
       GridModule.setLit(borders[t % borders.length]);
