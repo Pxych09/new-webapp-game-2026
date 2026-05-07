@@ -592,7 +592,7 @@ const DailyReward = (() => {
     if (!c) return;
     c.innerHTML = `
       <span class="credits-label">
-        Daily Rewards <b id="daily-reward-amount" class="credits-val">${amount}</b>
+        🎉 Daily Rewards <b id="daily-reward-amount" class="credits-val">${amount}</b>
       </span>
       <button id="btn-claim-reward" class="btn btn-claim-reward">🎁 Claim</button>`;
     c.querySelector("#btn-claim-reward").addEventListener("click", claim);
