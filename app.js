@@ -975,6 +975,17 @@ const bindEvents = () => {
   $("btn-logout").addEventListener("click",  () => { DailyReward.stopCountdown(); AuthModule.signOut(); });
   $("btn-logout2").addEventListener("click", () => { DailyReward.stopCountdown(); AuthModule.signOut(); });
 
+  // Hamburger toggle for game screen
+  const menuBtn  = $("game-menu-btn");
+  const menuDrop = $("game-menu-dropdown");
+  if (menuBtn && menuDrop) {
+    menuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      cls.toggle(menuDrop, "hidden");
+    });
+    document.addEventListener("click", () => cls.add(menuDrop, "hidden"));
+  }
+
   const enterGame = () => {
     Router.goto("screen-game");
     HistoryModule.load(State.user.uid);
