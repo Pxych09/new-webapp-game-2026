@@ -6,13 +6,26 @@
   <title>Fruit Game 2026</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/11534/11534503.png" type="image/png">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
+  <!-- ── SPLASH / LOADING SCREEN ───────────────────── -->
+  <div id="screen-splash" class="screen active">
+    <div class="splash-inner">
+      <div class="splash-logo">
+        <span class="splash-icon">🎰</span>
+        <h1 class="splash-title">FRUIT<br>GAME<br><span class="splash-year">2026</span></h1>
+      </div>
+      <div class="splash-spinner">
+        <div class="splash-ring"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── AUTH SCREEN ─────────────────────────────────── -->
-  <div id="screen-auth" class="screen active">
+  <div id="screen-auth" class="screen">
     <div class="auth-bg-grid"></div>
 
     <div class="auth-card">
@@ -20,9 +33,7 @@
         <span class="logo-icon">🎰</span>
         <h1 class="logo-title">FRUIT<br>GAME<br><span class="logo-year">2026</span></h1>
       </div>
-
       <p class="auth-tagline">Sign in with Google to play — instant, no password needed.</p>
-
       <button id="btn-google-signin" class="btn btn-google">
         <svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
           <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -32,7 +43,6 @@
         </svg>
         Continue with Google
       </button>
-
       <div id="auth-error" class="auth-msg error hidden"></div>
     </div>
 
@@ -47,7 +57,12 @@
     <header class="top-bar">
       <div class="top-bar-left">
         <img id="hdr-avatar" class="avatar" src="" alt="" style="display:none" />
-        <span class="site-logo">🎰 FG2026</span>
+        <div class="nickname-wrap">
+          <span class="nickname-display" id="dash-nickname-display" title="Click to edit your name"></span>
+          <button class="nickname-edit-btn" id="dash-nickname-edit-btn" title="Edit name">✏️</button>
+          <input class="nickname-input hidden" id="dash-nickname-input" maxlength="20" placeholder="Your nickname…" />
+          <button class="nickname-save-btn hidden" id="dash-nickname-save-btn" title="Save">✓</button>
+        </div>
       </div>
       <div class="top-bar-center">
         <span class="credits-label">CREDITS</span>
@@ -92,6 +107,12 @@
     <header class="top-bar">
       <div class="top-bar-left">
         <button id="btn-back" class="btn btn-sm">Back</button>
+        <div class="nickname-wrap">
+          <span class="nickname-display" id="game-nickname-display" title="Click to edit your name"></span>
+          <button class="nickname-edit-btn" id="game-nickname-edit-btn" title="Edit name">✏️</button>
+          <input class="nickname-input hidden" id="game-nickname-input" maxlength="20" placeholder="Your nickname…" />
+          <button class="nickname-save-btn hidden" id="game-nickname-save-btn" title="Save">✓</button>
+        </div>
       </div>
       <div class="top-bar-center">
         <span class="credits-label">CREDITS</span>
@@ -103,41 +124,81 @@
       </div>
     </header>
 
-    <div class="game-area">
-      
-      <div class="daily-reward">
-        <span>Daily Rewards <b id="daily-reward-amount">0</b></span>
-        <button id="btn-claim-reward">Claim</button>
-      </div>
-      
-      <h2 class="game-title">🎰 FRUIT SPIN</h2>
+    <!-- Side-panel layout wrapper -->
+    <div class="game-layout">
 
-      <div id="result-display" class="result-display hidden">
-        <span id="result-text"></span>
-      </div>
+      <!-- ── LEFT: HISTORY PANEL ── -->
+      <aside class="history-panel">
 
-      <div class="grid-wrapper">
-        <div id="fruit-grid" class="fruit-grid"></div>
-      </div>
+        <!-- LEADERBOARD -->
+        <div class="leaderboard-section">
+          <div class="leaderboard-header">
+            <span class="leaderboard-title">🏆 Leaderboard</span>
+            <span id="lb-user-count" class="lb-user-count">— players</span>
+          </div>
+          <div id="leaderboard-list" class="leaderboard-list">
+            <div class="lb-loading">Loading…</div>
+          </div>
+        </div>
 
-      <div class="spin-legend">
-        <span>🍒 = ₱1</span>
-        <span>🥭 = ₱3</span>
-        <span>🍎 = ₱5</span>
-        <span>🍍 = ₱10</span>
-        <span>🍫 = ₱100</span>
-      </div>
+        <div class="stat-divider"></div>
 
-      <div class="spin-controls">
-        <p class="spin-cost-note">Each spin costs <strong>5 credits</strong></p>
-        <button id="btn-spin" class="btn btn-spin">🎰 ROLL SPIN</button>
-      </div>
+        <div class="history-panel-header">
+          <h3 class="history-panel-title">📋 Activity</h3>
+          <span id="history-count" class="history-count-badge">0</span>
+        </div>
 
-      <div class="history-section">
-        <h3>Recent Spins</h3>
+        <!-- TODAY stats -->
+        <div class="stat-day-block">
+          <div class="stat-day-label">📅 Today</div>
+          <div class="stat-row">
+            <div class="stat-box">
+              <span class="stat-label">Total Spins</span>
+              <span id="stat-today-spins" class="stat-value">—</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Total Collected</span>
+              <span id="stat-today-won" class="stat-value">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-divider"></div>
+
         <div id="history-list" class="history-list"></div>
+        <div id="history-empty" class="history-empty">
+          <span>🎰</span>
+          <p>No spins yet.<br>Roll to start!</p>
+        </div>
+      </aside>
+
+      <!-- ── RIGHT: GAME AREA ── -->
+      <div class="game-area">
+        <h2 class="game-title">🎰 FRUIT SPIN</h2>
+
+        <div id="result-display" class="result-display hidden">
+          <span id="result-text"></span>
+        </div>
+
+        <div class="grid-wrapper">
+          <div id="fruit-grid" class="fruit-grid"></div>
+        </div>
+
+        <div class="spin-legend">
+          <span>🍒 = ₱1</span>
+          <span>🥭 = ₱3</span>
+          <span>🍎 = ₱5</span>
+          <span>🍍 = ₱10</span>
+          <span>🍫 = ₱100</span>
+        </div>
+
+        <div class="spin-controls">
+          <p class="spin-cost-note">Each spin costs <strong>5 credits</strong></p>
+          <button id="btn-spin" class="btn btn-spin">🎰 ROLL SPIN</button>
+        </div>
       </div>
-    </div>
+
+    </div><!-- /game-layout -->
   </div>
 
   <script type="module" src="app.js"></script>
