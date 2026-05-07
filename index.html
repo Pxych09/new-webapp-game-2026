@@ -75,6 +75,24 @@
     </header>
 
     <main class="dashboard">
+      <!-- ── DASHBOARD LEADERBOARD ── -->
+      <section class="dash-leaderboard">
+        <div class="dash-lb-header">
+          <div class="dash-lb-title-row">
+            <span class="dash-lb-icon">🏆</span>
+            <h2 class="dash-lb-title">LEADERBOARD</h2>
+            <span id="dash-lb-user-count" class="lb-user-count">— players</span>
+          </div>
+          <div class="lb-tabs">
+            <button id="lb-tab-credits"  class="lb-tab lb-tab-active">💰 Overall Credits</button>
+            <button id="lb-tab-popmatch" class="lb-tab">👻 Pop Match</button>
+          </div>
+        </div>
+        <div id="dash-leaderboard-list" class="dash-leaderboard-list">
+          <div class="lb-loading">Loading…</div>
+        </div>
+      </section>
+
       <h2 class="dash-title">CHOOSE A GAME</h2>
       <div class="game-cards">
         <div class="game-card active">
@@ -84,12 +102,12 @@
           <p>Spin the border grid &amp; win fruit prizes!</p>
           <button class="btn btn-primary" id="btn-play-fruit">Play</button>
         </div>
-        <div class="game-card coming-soon">
-          <div class="game-card-badge soon">SOON</div>
-          <div class="game-card-icon">🎱</div>
-          <h3>Lucky Ball</h3>
-          <p>Roll your luck on the ball table.</p>
-          <button class="btn" disabled>Coming Soon</button>
+        <div class="game-card active">
+          <div class="game-card-badge">PLAY NOW</div>
+          <div class="game-card-icon">👻</div>
+          <h3>Pop Match</h3>
+          <p>Flip cards, chain combos, and earn credits stage by stage!</p>
+          <button class="btn btn-primary" id="btn-play-match">Play</button>
         </div>
         <div class="game-card coming-soon">
           <div class="game-card-badge soon">SOON</div>
@@ -231,21 +249,180 @@
       </article>
 
       <!-- ── GAME 2: LUCKY BALL (coming soon) ── -->
-      <article class="about-card about-card-soon">
+      <article class="about-card" id="about-pop-match">
         <div class="about-card-header">
           <div class="about-card-num">02</div>
           <div class="about-card-title-wrap">
-            <span class="about-card-icon">🎱</span>
+            <span class="about-card-icon">👻</span>
             <div>
-              <h3 class="about-card-title">Lucky Ball</h3>
-              <span class="about-card-tag">Coming Soon · Physics-Based</span>
+              <h3 class="about-card-title">Pop Match</h3>
+              <span class="about-card-tag">Free to Play · Skill-Based · Memory Arcade</span>
             </div>
           </div>
-          <span class="about-card-status soon">SOON</span>
+          <span class="about-card-status live">LIVE</span>
         </div>
+
         <p class="about-card-desc">
-          Roll your luck on the ball table. Details dropping soon — stay tuned and keep your credits ready.
+          A fast-paced memory arcade game where skill pays — literally. Sign in with Google,
+          flip face-down cards to reveal hidden symbols, and match pairs before the clock runs
+          out. No credits required to play. Instead, <strong>clearing stages earns you
+          credits</strong> you can spend in other games. Five escalating stages. One combo
+          chain. How far can you go?
         </p>
+
+        <div class="about-mechanic-grid">
+
+          <div class="about-mechanic about-mechanic-outline">
+            <div>
+              <span class="mechanic-label">What keeps it fun</span>
+              <span class="mechanic-text"><strong>The Combo Chain</strong> — every consecutive
+              match without a miss multiplies your score. Your first match scores 12 pts, but
+              by your fifth consecutive match you're scoring 60 pts for the same action. One
+              miss resets the chain to zero, which makes each flip feel genuinely tense.</span>
+              <br>
+              <span class="mechanic-text"><strong>The Memory Window</strong> — when you flip
+              a card that doesn't match, both cards stay visible for 680ms before flipping back.
+              That brief window is where the game is actually won or lost. Players who use it
+              to memorize positions will dramatically outperform players who don't.</span>
+              <br>
+              <span class="mechanic-text"><strong>The Stage Ladder</strong> — each stage adds
+              more pairs and cuts the timer, so the pressure compounds. Clearing Stage 1 feels
+              easy. Clearing Stage 5 under a 43-second clock with 12 pairs on a 5×5 grid feels
+              like a genuine achievement.</span>
+              <br>
+              <span class="mechanic-text"><strong>Credit Rewards</strong> — unlike Fruit Game,
+              Pop Match costs nothing to play. It's the grind-and-earn counterpart — skilled
+              players can earn up to 45 credits across a full 5-stage run, directly fueling
+              their Fruit Game sessions.</span>
+            </div>
+          </div>
+
+          <div class="about-mechanic about-mechanic-outline">
+            <div>
+              <span class="mechanic-label">The core design philosophy 🧿</span>
+              <span class="mechanic-text">Pop Match is built around the tension between
+              speed and accuracy. The timer pushes you to move fast. The combo system punishes
+              recklessness. These two forces are always pulling against each other, and finding
+              your personal rhythm between them is where the skill ceiling lives.</span>
+              <br>
+              <span class="mechanic-text">It's designed as the deliberate counterweight to
+              Fruit Game — where Fruit Game is pure luck and passive tension, Pop Match is pure
+              skill and active pressure. The two games share a credit economy but serve
+              completely different player moods. On a lucky day you spin. On a focused day
+              you match.</span>
+              <br>
+              <span class="mechanic-text">The arcade aesthetic — dark palette, glowing cards,
+              retro sound design — is shared with the rest of the platform intentionally.
+              Everything feels like it belongs in the same cabinet.</span>
+            </div>
+          </div>
+
+          <div class="about-mechanic about-mechanic-outline">
+            <div>
+              <span class="mechanic-label">Who it's for</span>
+              <span class="mechanic-text">Players who want to feel like their result was
+              earned, not rolled. If Fruit Game frustrates you because luck is out of your
+              hands, Pop Match is the antidote — every outcome here traces directly back to
+              a decision you made. It also rewards returning players more than new ones,
+              since spatial memory of symbol positions improves with familiarity.</span>
+            </div>
+          </div>
+
+          <div class="about-mechanic">
+            <span class="mechanic-icon">🧠</span>
+            <div>
+              <span class="mechanic-label">How to Win</span>
+              <span class="mechanic-text">Flip two cards per turn. Match the symbols to keep
+              them face-up. Clear all pairs before the timer hits zero to advance to the next
+              stage. Miss a pair and both cards flip back face-down.</span>
+            </div>
+          </div>
+
+          <div class="about-mechanic">
+            <span class="mechanic-icon">⚡</span>
+            <div>
+              <span class="mechanic-label">Combo Multiplier</span>
+              <span class="mechanic-text">Consecutive matches multiply your score. Chain
+              them together for massive points. One miss resets the chain — so every flip
+              carries real stakes.</span>
+            </div>
+          </div>
+
+          <div class="about-mechanic">
+            <span class="mechanic-icon">💰</span>
+            <div>
+              <span class="mechanic-label">Earn Credits</span>
+              <span class="mechanic-text">Pop Match is free to play and pays out credits
+              on every stage cleared. Max 50 credits earnable per day — spend them on
+              Fruit Game spins or save them up.</span>
+            </div>
+          </div>
+
+          <div class="about-mechanic">
+            <span class="mechanic-icon">🏆</span>
+            <div>
+              <span class="mechanic-label">High Score Board</span>
+              <span class="mechanic-text">Your personal best is saved to your account and
+              appears on the global Pop Match leaderboard on the dashboard. Score is
+              determined by combo chains and stage completion bonuses.</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Stage breakdown table -->
+        <div class="about-prizes">
+          <span class="about-prizes-label">STAGE BREAKDOWN</span>
+
+          <div class="prize-row">
+            <span class="prize-fruit">1️⃣</span>
+            <span class="prize-name">Stage 1</span>
+            <div class="prize-bar-wrap"><div class="prize-bar" style="--w:20%"></div></div>
+            <span class="prize-val" style="color:var(--win)">+2 cr</span>
+            <span class="prize-odds">4 pairs · 63s</span>
+          </div>
+
+          <div class="prize-row">
+            <span class="prize-fruit">2️⃣</span>
+            <span class="prize-name">Stage 2</span>
+            <div class="prize-bar-wrap"><div class="prize-bar" style="--w:35%"></div></div>
+            <span class="prize-val" style="color:var(--win)">+4 cr</span>
+            <span class="prize-odds">6 pairs · 58s</span>
+          </div>
+
+          <div class="prize-row">
+            <span class="prize-fruit">3️⃣</span>
+            <span class="prize-name">Stage 3</span>
+            <div class="prize-bar-wrap"><div class="prize-bar" style="--w:52%"></div></div>
+            <span class="prize-val" style="color:var(--win)">+7 cr</span>
+            <span class="prize-odds">8 pairs · 53s</span>
+          </div>
+
+          <div class="prize-row">
+            <span class="prize-fruit">4️⃣</span>
+            <span class="prize-name">Stage 4</span>
+            <div class="prize-bar-wrap"><div class="prize-bar" style="--w:72%"></div></div>
+            <span class="prize-val" style="color:var(--win)">+12 cr</span>
+            <span class="prize-odds">10 pairs · 48s</span>
+          </div>
+
+          <div class="prize-row jackpot-row">
+            <span class="prize-fruit">5️⃣</span>
+            <span class="prize-name">Stage 5 — Full Clear</span>
+            <div class="prize-bar-wrap"><div class="prize-bar jackpot-bar" style="--w:100%"></div></div>
+            <span class="prize-val jackpot-val">+20 cr</span>
+            <span class="prize-odds jackpot-odds">12 pairs · 43s</span>
+          </div>
+
+          <div class="prize-row" style="margin-top:6px; border-top: 1px solid var(--border); padding-top:10px;">
+            <span class="prize-fruit">📅</span>
+            <span class="prize-name">Daily Cap</span>
+            <div class="prize-bar-wrap"><div class="prize-bar" style="--w:100%; background:var(--muted)"></div></div>
+            <span class="prize-val" style="color:var(--muted)">50 cr</span>
+            <span class="prize-odds">Max per day</span>
+          </div>
+
+        </div>
       </article>
 
       <!-- ── GAME 3: CARD FLIP (coming soon) ── -->
@@ -294,7 +471,7 @@
           ☰
           <div class="menu-dropdown hidden" id="game-menu-dropdown">
             <div class="menu-dropdown-email" id="game-email">—</div>
-            <button id="btn-logout2" class="btn btn-sm">🚪 Logout</button>
+            <button id="btn-logout2" class="btn btn-sm">Logout</button>
           </div>
         </div>
       </div>
@@ -305,18 +482,8 @@
 
       <!-- ── LEFT: HISTORY PANEL ── -->
       <aside class="history-panel">
-
-        <!-- LEADERBOARD -->
-        <div class="leaderboard-section">
-          <div class="leaderboard-header">
-            <span class="leaderboard-title">🏆 Leaderboard</span>
-            <span id="lb-user-count" class="lb-user-count">— players</span>
-          </div>
-          <div id="leaderboard-list" class="leaderboard-list">
-            <div class="lb-loading">Loading…</div>
-          </div>
-        </div>
-
+<!-- Leaderboard lives on dashboard; keep this hidden anchor for renderAll -->
+        <div id="leaderboard-list" style="display:none"></div>
         <div class="stat-divider"></div>
 
         <div class="history-panel-header">
@@ -378,6 +545,110 @@
       </div>
 
     </div><!-- /game-layout -->
+  </div>
+
+  <!-- ── POP MATCH SHOP MODAL ── -->
+  <div id="pm-shop-overlay" class="pm-shop-overlay"></div>
+    <div id="pm-shop-modal" class="pm-shop-modal hidden">
+      <div class="pm-shop-panel">
+
+        <!-- Header -->
+        <div class="pm-shop-header">
+          <div class="pm-shop-title-row">
+            <span>🛍️</span>
+            <h2 class="pm-shop-title">PRESET SHOP</h2>
+            <div class="pm-shop-balance">
+              <span class="credits-label">YOUR CREDITS</span>
+              <span id="pm-shop-credits" class="credits-val">—</span>
+            </div>
+          </div>
+          <button id="pm-shop-close" class="pm-shop-close">✕</button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="lb-tabs pm-shop-tabs">
+          <button id="pm-shop-tab-color" class="lb-tab lb-tab-active">🎨 Color Themes</button>
+          <button id="pm-shop-tab-emoji" class="lb-tab">😀 Emoji Packs</button>
+        </div>
+
+        <!-- Message toast -->
+        <div id="pm-shop-msg" class="pm-shop-msg"></div>
+
+        <!-- Preview confirmation bar -->
+        <div id="pm-shop-preview-bar" class="pm-shop-preview-bar hidden">
+          <span class="pm-shop-preview-label">👁 Preview active — happy with it?</span>
+          <div class="pm-shop-preview-actions">
+            <button id="pm-shop-preview-confirm" class="btn btn-primary btn-sm">✅ Buy &amp; Equip</button>
+            <button id="pm-shop-preview-cancel"  class="btn btn-sm">✕ Cancel</button>
+          </div>
+        </div>
+
+        <!-- Color section -->
+        <div id="pm-shop-section-color" class="pm-shop-section">
+          <p class="pm-shop-section-desc">
+            Changes card borders, matched card color, and board glow.
+            Hover to preview live on the board before buying.
+          </p>
+          <div id="pm-shop-color-grid" class="pm-shop-grid"></div>
+        </div>
+
+        <!-- Emoji section -->
+        <div id="pm-shop-section-emoji" class="pm-shop-section hidden">
+          <p class="pm-shop-section-desc">
+            Replaces the symbols on all cards. Takes effect on your next game start.
+          </p>
+          <div id="pm-shop-emoji-grid" class="pm-shop-grid"></div>
+        </div>
+
+      </div>
+    </div>
+
+  <!-- ── POP MATCH GAME ──────────────────────────────── -->
+  <div id="screen-match" class="screen">
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <button id="btn-back-match" class="btn btn-sm">Back</button>
+        <div class="nickname-wrap">
+          <span class="nickname-display" id="match-nickname-display"></span>
+        </div>
+      </div>
+      <div class="top-bar-right">
+        <div class="credits-pill">
+          <span class="credits-label">CREDITS</span>
+          <span id="match-credits" class="credits-val">—</span>
+        </div>
+        <button id="pm-shop-btn" class="btn btn-sm pm-shop-btn-trigger">🛍️ Shop</button>
+      </div>
+    </header>
+
+    <div class="pm-scanlines"></div>
+
+    <main class="pm-container">
+      <div class="pm-shell">
+        <div class="pm-game">
+          <h1 class="pm-title">POP MATCH</h1>
+
+          <div class="pm-stage-info">
+            STAGE <span id="pm-stageNum">1</span>
+          </div>
+
+          <div class="pm-stats">
+            <div class="pm-panel"><p>TIME</p><span id="pm-timer">60</span></div>
+            <div class="pm-panel"><p>SCORE</p><span id="pm-score">0</span></div>
+            <div class="pm-panel"><p>HIGH</p><span id="pm-highScore">0</span></div>
+            <div class="pm-panel"><p>COMBO</p><span id="pm-combo">x0</span></div>
+          </div>
+
+          <div id="pm-board" class="pm-board"></div>
+
+          <div class="pm-controls">
+            <button id="pm-mainBtn">START GAME</button>
+          </div>
+
+          <div id="pm-message" class="pm-message"></div>
+        </div>
+      </div>
+    </main>
   </div>
 
   <script type="module" src="app.js"></script>
