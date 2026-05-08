@@ -1191,6 +1191,7 @@ const ShopModule = (() => {
     await DB.saveInventory(State.user.uid, _inventory);
     applyActive();
     renderShopUI();
+    renderEquippedTheme();   // ← add this
     showShopMsg("✅ Equipped!", "success");
   };
 
@@ -1299,6 +1300,27 @@ const ShopModule = (() => {
     });
   };
 
+  const renderEquippedTheme = () => {
+  const row = document.getElementById("pm-ci-equipped-row");
+  if (!row) return;
+
+  const colorPreset = PM_PRESETS.colors.find(c => c.id === _inventory.activeColor)
+    ?? PM_PRESETS.colors[0];
+  const emojiPreset = PM_PRESETS.emojis.find(e => e.id === _inventory.activeEmoji)
+    ?? PM_PRESETS.emojis[0];
+
+  row.innerHTML = `
+    <span class="pm-ci-equipped-label text-active">Currently Equipped: </span>
+    <span class="pm-ci-theme-pill">
+      <span class="pm-ci-theme-swatch" style="background:${colorPreset.preview.matched}"></span>
+      ${colorPreset.name}
+    </span>
+    <span class="pm-ci-theme-pill">
+      ${emojiPreset.symbols[0]}
+      ${emojiPreset.name}
+    </span>`;
+};
+
   // ── Open / close ──────────────────────────────────
 
   const open = async () => {
@@ -1322,6 +1344,7 @@ const ShopModule = (() => {
   return {
     open, close, init, getActiveSymbols, applyActive,
     switchShopTab, renderShopUI, cancelPreview,
+    renderEquippedTheme,   // ← add this
   };
 })();
 
@@ -1362,6 +1385,7 @@ class PopMatchGame {
     await ShopModule.init();                      // ✅ wait for Firestore inventory to load
     this.symbols = ShopModule.getActiveSymbols(); // now reads the correct saved preset
     ShopModule.applyActive();
+    ShopModule.renderEquippedTheme(); 
     this.resetFullGame();
     this.createBoard();
     this.bindEvents();
