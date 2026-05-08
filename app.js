@@ -177,6 +177,39 @@ const FIXED_LAYOUT = {
 };
 
 // ═══════════════════════════════════════════════════
+// TOAST MODULE
+// ═══════════════════════════════════════════════════
+
+const Toast = (() => {
+  let _timer = null;
+
+  const show = (text, type = "", duration = 2500) => {
+    const el = $("pm-toast");
+    if (!el) return;
+
+    // Cancel any existing hide timer and reset animation
+    clearTimeout(_timer);
+    el.className = "pm-toast";           // strip all type + hiding classes
+    el.textContent = text;
+    if (type) cls.add(el, type);
+    cls.remove(el, "hidden");
+
+    // Force reflow so animation restarts if called back-to-back
+    void el.offsetWidth;
+
+    _timer = setTimeout(() => {
+      cls.add(el, "hiding");
+      el.addEventListener("animationend", () => {
+        cls.add(el, "hidden");
+        cls.remove(el, "hiding");
+      }, { once: true });
+    }, duration);
+  };
+
+  return { show };
+})();
+
+// ═══════════════════════════════════════════════════
 // FIREBASE INIT
 // ═══════════════════════════════════════════════════
 
@@ -651,8 +684,9 @@ const HistoryModule = (() => {
 const CreditsModule = (() => {
   const setDisplay = (val) => {
     const v = Math.floor(val);
-    $("hdr-credits").textContent  = v;
-    $("game-credits").textContent = v;
+    $("hdr-credits").textContent   = v;
+    $("game-credits").textContent  = v;
+    $("match-credits").textContent = v;
   };
 
   const bump = () => {
@@ -914,7 +948,11 @@ const SpinModule = (() => {
 })();
 
 // ═══════════════════════════════════════════════════
-// POP MATCH SHOP MODULE
+// POP MATCH SHOP MODULE  (inline panel, above pm-shell)
+// ═══════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════
+// POP MATCH SHOP MODULE  (inline panel, above pm-shell)
 // ═══════════════════════════════════════════════════
 
 const ShopModule = (() => {
@@ -924,13 +962,9 @@ const ShopModule = (() => {
     activeEmoji:  "classic",
   };
 
-  // Preview state — null means no preview locked in
-  // "locked" means user clicked to preview (not just hovering)
-  let _preview = {
-    color:  null,   // preset id being previewed
-    emoji:  null,
-    locked: false,  // true = user clicked to lock preview; false = just hovering
-  };
+  // Which preset is currently being previewed (clicked), null = none
+  let _previewId   = null;
+  let _previewType = null;
 
   // ── Init ──────────────────────────────────────────
 
@@ -944,7 +978,7 @@ const ShopModule = (() => {
     applyActive();
   };
 
-  // ── Apply active preset to the board CSS vars ─────
+  // ── Apply active preset to board CSS vars ──────────
 
   const applyActive = () => {
     const colorPreset = PM_PRESETS.colors.find(c => c.id === _inventory.activeColor)
@@ -967,70 +1001,70 @@ const ShopModule = (() => {
     return pack.symbols;
   };
 
-  // ── Preview helpers ───────────────────────────────
+  // ── Click-to-preview ──────────────────────────────
+  // Clicking a card toggles it as the previewed preset.
+  // Clicking the same card again deselects (reverts board).
+  // Only color themes preview live on the board below.
 
-  /** Hover-only preview (not locked — reverts on mouse leave) */
-  const hoverPreview = (type, presetId) => {
-    if (_preview.locked) return; // don't overwrite a locked preview
-    if (type === "color") {
-      const p = PM_PRESETS.colors.find(c => c.id === presetId);
-      if (p) applyColorPreset(p.preview);
-    }
-    // emoji hover just highlights the card, board update on lock
-    _preview[type] = presetId;
-    renderShopUI();
-  };
+  const togglePreview = (type, presetId) => {
+    const alreadyPreviewing = _previewId === presetId && _previewType === type;
 
-  /** Mouse-leave: revert hover preview (only if not locked) */
-  const hoverEnd = () => {
-    if (_preview.locked) return;
-    _preview.color = null;
-    _preview.emoji = null;
-    applyActive(); // revert board to saved preset
-    renderShopUI();
-  };
-
-  /**
-   * Click a preset card:
-   * - If not locked yet → lock this preset as the active preview
-   * - If already locked on THIS preset → same as confirm (buy/equip)
-   * - If locked on a DIFFERENT preset → switch lock to this one
-   */
-  const clickPreset = (type, presetId) => {
-    const alreadyLocked = _preview.locked
-      && ((type === "color" && _preview.color === presetId)
-       || (type === "emoji" && _preview.emoji === presetId));
-
-    if (alreadyLocked) {
-      // Second click on same preset = confirm
-      purchase(type, presetId);
-      return;
-    }
-
-    // Lock the preview
-    _preview.locked = true;
-    if (type === "color") {
-      _preview.color = presetId;
-      const p = PM_PRESETS.colors.find(c => c.id === presetId);
-      if (p) applyColorPreset(p.preview);
+    if (alreadyPreviewing) {
+      // Deselect — revert board and clear preview state
+      _previewId   = null;
+      _previewType = null;
+      applyActive();
     } else {
-      _preview.emoji = presetId;
+      // Select this preset as the active preview
+      _previewId   = presetId;
+      _previewType = type;
+      if (type === "color") {
+        const p = PM_PRESETS.colors.find(c => c.id === presetId);
+        if (p) applyColorPreset(p.preview);
+      }
     }
 
-    showShopMsg(
-      "Previewing — click again to buy & equip, or hit Cancel to revert.",
-      "preview"
-    );
     renderShopUI();
   };
 
-  /** Cancel button: clear all preview state and revert board */
-  const cancelPreview = () => {
-    _preview = { color: null, emoji: null, locked: false };
+  const clearPreview = () => {
+    _previewId   = null;
+    _previewType = null;
     applyActive();
-    showShopMsg("", "");
-    renderShopUI();
   };
+
+  // ── Confirm dialog ────────────────────────────────
+
+  const showConfirm = (preset) => new Promise((resolve) => {
+    const overlay = $("pm-confirm-overlay");
+    const titleEl = $("pm-confirm-title");
+    const bodyEl  = $("pm-confirm-body");
+    const yesBtn  = $("pm-confirm-yes");
+    const noBtn   = $("pm-confirm-no");
+
+    titleEl.textContent = `Purchase "${preset.name}"?`;
+    bodyEl.innerHTML    = `You are about to buy <strong>${preset.name}</strong> for
+      <strong>${preset.price} credits</strong>.<br><br>
+      Are you sure you want to proceed?`;
+
+    cls.remove(overlay, "hidden");
+
+    const finish = (result) => {
+      cls.add(overlay, "hidden");
+      yesBtn.removeEventListener("click", onYes);
+      noBtn.removeEventListener("click",  onNo);
+      overlay.removeEventListener("click", onOverlay);
+      resolve(result);
+    };
+
+    const onYes     = () => finish(true);
+    const onNo      = () => finish(false);
+    const onOverlay = (e) => { if (e.target === overlay) finish(false); };
+
+    yesBtn.addEventListener("click",  onYes);
+    noBtn.addEventListener("click",   onNo);
+    overlay.addEventListener("click", onOverlay);
+  });
 
   // ── Purchase / equip ──────────────────────────────
 
@@ -1039,15 +1073,22 @@ const ShopModule = (() => {
     const preset = list.find(p => p.id === presetId);
     if (!preset) return;
 
-    // Already owned → just equip
+    // Already owned → equip directly, no confirm needed
     if (_inventory.ownedPresets.includes(presetId)) {
       await equipPreset(type, presetId);
       return;
     }
 
-    // Check credits
+    // Not enough credits
     if (State.userData.credits < preset.price) {
       showShopMsg("Not enough credits!", "error");
+      return;
+    }
+
+    // Confirm dialog
+    const confirmed = await showConfirm(preset);
+    if (!confirmed) {
+      showShopMsg("Purchase cancelled.", "");
       return;
     }
 
@@ -1064,41 +1105,21 @@ const ShopModule = (() => {
     if (type === "color") _inventory.activeColor = presetId;
     else                  _inventory.activeEmoji = presetId;
 
-    // Clear all preview state
-    _preview = { color: null, emoji: null, locked: false };
-
+    clearPreview();
     await DB.saveInventory(State.user.uid, _inventory);
     applyActive();
     renderShopUI();
-    showShopMsg(`✅ Preset equipped!`, "success");
+    showShopMsg("✅ Equipped!", "success");
   };
 
   // ── Shop message toast ────────────────────────────
+  const showShopMsg = (text, type = "") => Toast.show(text, type);
 
-  const showShopMsg = (text, type = "") => {
-    const el = $("pm-shop-msg");
-    if (!el) return;
-    el.textContent = text;
-    el.className   = `pm-shop-msg ${type}`;
-    // Auto-clear success/error (not preview banners)
-    if (type !== "preview" && text) {
-      setTimeout(() => { if (el.textContent === text) el.textContent = ""; }, 2800);
-    }
-  };
-
-  // ── Render the full shop UI ───────────────────────
+  // ── Render ────────────────────────────────────────
 
   const renderShopUI = () => {
     renderSection("color");
     renderSection("emoji");
-
-    // Update credits display inside shop
-    const credEl = $("pm-shop-credits");
-    if (credEl) credEl.textContent = Math.floor(State.userData?.credits ?? 0);
-
-    // Show/hide the cancel-preview bar
-    const bar = $("pm-shop-preview-bar");
-    if (bar) bar.classList.toggle("hidden", !_preview.locked);
   };
 
   const renderSection = (type) => {
@@ -1106,30 +1127,26 @@ const ShopModule = (() => {
     if (!container) return;
     container.innerHTML = "";
 
-    const list      = type === "color" ? PM_PRESETS.colors : PM_PRESETS.emojis;
-    const activeId  = type === "color" ? _inventory.activeColor : _inventory.activeEmoji;
-    const previewId = type === "color" ? _preview.color : _preview.emoji;
+    const list     = type === "color" ? PM_PRESETS.colors : PM_PRESETS.emojis;
+    const activeId = type === "color" ? _inventory.activeColor : _inventory.activeEmoji;
 
     list.forEach(preset => {
-      const owned     = _inventory.ownedPresets.includes(preset.id);
-      const isActive  = preset.id === activeId;
-      const isPrev    = preset.id === previewId && _preview.locked;
-      const isHovered = preset.id === previewId && !_preview.locked;
+      const owned      = _inventory.ownedPresets.includes(preset.id);
+      const isActive   = preset.id === activeId;
+      const isPrev     = preset.id === _previewId && type === _previewType;
 
       const card = document.createElement("div");
       card.className = [
         "pm-shop-card",
-        isActive  ? "pm-shop-card-active"   : "",
-        isPrev    ? "pm-shop-card-preview"  : "",
-        isHovered ? "pm-shop-card-hovering" : "",
-        !owned    ? "pm-shop-card-locked"   : "",
+        isActive ? "pm-shop-card-active"  : "",
+        isPrev   ? "pm-shop-card-preview" : "",
       ].filter(Boolean).join(" ");
 
-      // Color swatch or emoji grid preview
+      // Visual
       const visual = type === "color"
         ? `<div class="pm-shop-swatch" style="
               border-color:${preset.preview.cardBorder};
-              box-shadow: 0 0 12px ${preset.preview.glow};
+              box-shadow: 0 0 10px ${preset.preview.glow};
            ">
              <div class="pm-shop-swatch-inner" style="background:${preset.preview.matched}"></div>
            </div>`
@@ -1137,24 +1154,31 @@ const ShopModule = (() => {
              ${preset.symbols.slice(0, 6).map(s => `<span>${s}</span>`).join("")}
            </div>`;
 
-      // Badge logic
+      // Status badge
       let badge = "";
-      if (isActive) {
-        badge = `<span class="pm-shop-badge equipped">✓ EQUIPPED</span>`;
-      } else if (isPrev) {
-        badge = `<span class="pm-shop-badge previewing">👁 PREVIEWING</span>`;
-      } else if (owned) {
-        badge = `<span class="pm-shop-badge owned">OWNED</span>`;
-      } else if (preset.free) {
-        badge = `<span class="pm-shop-badge free">FREE</span>`;
-      } else {
-        badge = `<span class="pm-shop-badge price">💰 ${preset.price} cr</span>`;
-      }
+      if (isActive)       badge = `<span class="pm-shop-badge equipped">✓ EQUIPPED</span>`;
+      else if (isPrev)    badge = `<span class="pm-shop-badge previewing">👁 PREVIEWING</span>`;
+      else if (owned)     badge = `<span class="pm-shop-badge owned">OWNED</span>`;
+      else if (preset.free) badge = `<span class="pm-shop-badge free">FREE</span>`;
+      else                badge = `<span class="pm-shop-badge price">💰 ${preset.price} cr</span>`;
 
-      // Hint text under the badge when locked in preview
-      const hint = isPrev
-        ? `<span class="pm-shop-click-hint">Click again to confirm</span>`
-        : "";
+      // Action button — shown below the badge
+      // • Already equipped  → no button (it IS active)
+      // • Owned but not equipped → "Equip" button
+      // • Not owned, free   → "Equip" button
+      // • Not owned, paid   → "Buy & Equip" button (shown always, not just in preview)
+      let actionBtn = "";
+      if (!isActive) {
+        if (owned || preset.free) {
+          actionBtn = `<button class="pm-shop-action-btn pm-shop-equip-btn" data-id="${preset.id}" data-type="${type}">
+            ✓ Equip
+          </button>`;
+        } else {
+          actionBtn = `<button class="pm-shop-action-btn pm-shop-buy-btn" data-id="${preset.id}" data-type="${type}">
+            🛒 Buy · ${preset.price} cr
+          </button>`;
+        }
+      }
 
       card.innerHTML = `
         ${visual}
@@ -1162,54 +1186,61 @@ const ShopModule = (() => {
           <span class="pm-shop-card-name">${preset.name}</span>
           <span class="pm-shop-card-desc">${preset.desc}</span>
           ${badge}
-          ${hint}
+          ${actionBtn}
         </div>`;
 
-      // Hover = temporary live preview (color only; emoji just highlights)
-      card.addEventListener("mouseenter", () => hoverPreview(type, preset.id));
-      card.addEventListener("mouseleave", hoverEnd);
+      // Clicking the card itself toggles preview
+      card.addEventListener("click", (e) => {
+        // Don't trigger preview when clicking the action button
+        if (e.target.closest(".pm-shop-action-btn")) return;
+        if (!isActive) togglePreview(type, preset.id);
+      });
 
-      // Click = lock preview
-      card.addEventListener("click", () => clickPreset(type, preset.id));
+      // Action button click → purchase or equip
+      card.querySelector(".pm-shop-action-btn")
+        ?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          purchase(type, preset.id);
+        });
 
       container.appendChild(card);
     });
   };
 
-  // ── Modal open / close ────────────────────────────
+  // ── Tab switcher ──────────────────────────────────
+
+  const switchShopTab = (tab) => {
+    clearPreview();
+    ["color", "emoji"].forEach(t => {
+      $(`pm-shop-tab-${t}`)?.classList.toggle("pm-shop-tab-active", t === tab);
+      $(`pm-shop-section-${t}`)?.classList.toggle("hidden",         t !== tab);
+    });
+  };
+
+  // ── Open / close ──────────────────────────────────
 
   const open = async () => {
     await init();
     renderShopUI();
-    const modal   = $("pm-shop-modal");
-    const overlay = $("pm-shop-overlay");
-    if (modal) {
-      cls.remove(modal, "hidden");
-      requestAnimationFrame(() => {
-        cls.add(modal,   "open");
-        cls.add(overlay, "open");
-      });
-      switchShopTab("color");
+    const panel = $("pm-shop-panel");
+    if (panel) {
+      cls.remove(panel, "hidden");
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+    switchShopTab("color");
   };
 
   const close = () => {
-    cancelPreview();
-    const modal   = $("pm-shop-modal");
-    const overlay = $("pm-shop-overlay");
-    cls.remove(modal,   "open");
-    cls.remove(overlay, "open");
-    setTimeout(() => cls.add(modal, "hidden"), 280);
+    clearPreview();
+    cls.add($("pm-shop-panel"), "hidden");
   };
 
-  const switchShopTab = (tab) => {
-    ["color", "emoji"].forEach(t => {
-      $(`pm-shop-tab-${t}`)?.classList.toggle("lb-tab-active", t === tab);
-      $(`pm-shop-section-${t}`)?.classList.toggle("hidden",    t !== tab);
-    });
-  };
+  const cancelPreview = () => clearPreview();
 
-  return { open, close, init, getActiveSymbols, applyActive, switchShopTab, renderShopUI };
+  return {
+    open, close, init, getActiveSymbols, applyActive,
+    switchShopTab, renderShopUI, cancelPreview,
+  };
 })();
 
 // ═══════════════════════════════════════════════════
@@ -1246,6 +1277,7 @@ class PopMatchGame {
 
   /** Called by Router each time the screen is entered */
   mount() {
+     ShopModule.init();
     this.symbols = ShopModule.getActiveSymbols(); // refresh symbols on each entry
     ShopModule.applyActive();                     // apply saved color preset
     this.resetFullGame();
@@ -1500,9 +1532,7 @@ loadHighScore() {
   }
 
   showMessage(text, type = "") {
-    this.messageEl.textContent = text;
-    this.messageEl.className   = `pm-message ${type}`;
-    setTimeout(() => { if (this.messageEl.textContent === text) this.messageEl.textContent = ""; }, 2200);
+    Toast.show(text, type);
   }
 
   playSound(type) {
@@ -1873,20 +1903,12 @@ const bindEvents = () => {
   // Shop button
   $("pm-shop-btn")?.addEventListener("click", () => ShopModule.open());
   $("pm-shop-close")?.addEventListener("click", () => ShopModule.close());
-  $("pm-shop-overlay")?.addEventListener("click", () => ShopModule.close());
 
   // Shop tabs
   $("pm-shop-tab-color")?.addEventListener("click", () => ShopModule.switchShopTab("color"));
   $("pm-shop-tab-emoji")?.addEventListener("click", () => ShopModule.switchShopTab("emoji"));
-  $("pm-shop-preview-confirm")?.addEventListener("click", () => {
-    // click the currently previewing card to trigger the "second click = confirm" logic
-    document.querySelector(".pm-shop-card-preview")?.click();
-  });
-  $("pm-shop-preview-cancel")?.addEventListener("click", () => {
-    // Need to expose cancelPreview — add it to the return object in ShopModule:
-    // return { open, close, init, getActiveSymbols, applyActive, switchShopTab, renderShopUI, cancelPreview };
-    ShopModule.cancelPreview();
-  });
+  $("pm-shop-close-btn")?.addEventListener("click", () => ShopModule.close());
+
 };
 
 // ═══════════════════════════════════════════════════
