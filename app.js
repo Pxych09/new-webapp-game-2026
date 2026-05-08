@@ -98,6 +98,48 @@ const PM_PRESETS = {
       preview: { cardBorder: "#38bdf8", matched: "#0ea5e9", glow: "rgba(56,189,248,0.5)" },
       desc:    "Cool blue tones. Keep it frosty.",
     },
+
+    // NEW COLORS
+    {
+      id:      "lava",
+      name:    "Lava Rush",
+      price:   170,
+      free:    false,
+      preview: { cardBorder: "#ff3b30", matched: "#ff9500", glow: "rgba(255,59,48,0.5)" },
+      desc:    "Molten red energy with blazing orange highlights.",
+    },
+    {
+      id:      "forest",
+      name:    "Forest Core",
+      price:   140,
+      free:    false,
+      preview: { cardBorder: "#22c55e", matched: "#15803d", glow: "rgba(34,197,94,0.5)" },
+      desc:    "Deep greens inspired by nature and adventure.",
+    },
+    {
+      id:      "sunset",
+      name:    "Sunset Drift",
+      price:   160,
+      free:    false,
+      preview: { cardBorder: "#fb7185", matched: "#f97316", glow: "rgba(251,113,133,0.5)" },
+      desc:    "Warm pink and orange skies at golden hour.",
+    },
+    {
+      id:      "cyber",
+      name:    "Cyber Matrix",
+      price:   200,
+      free:    false,
+      preview: { cardBorder: "#00ff99", matched: "#00ccff", glow: "rgba(0,255,153,0.5)" },
+      desc:    "Digital green with futuristic blue neon vibes.",
+    },
+    {
+      id:      "royal",
+      name:    "Royal Velvet",
+      price:   180,
+      free:    false,
+      preview: { cardBorder: "#7c3aed", matched: "#f43f5e", glow: "rgba(124,58,237,0.5)" },
+      desc:    "Elegant royal purple with luxurious pink accents.",
+    },
   ],
 
   emojis: [
@@ -106,7 +148,7 @@ const PM_PRESETS = {
       name:    "Classic Arcade",
       price:   0,
       free:    true,
-      symbols: ["👾","🕹️","💎","⚡","👑","🎲","🚀","🔥","🌌","🌀"],
+      symbols: ["👾","🕹️","💎","⚡","👑","🎲","🚀","🔥","🧩","🌀"],
       desc:    "The original symbol set. Always free.",
     },
     {
@@ -140,6 +182,48 @@ const PM_PRESETS = {
       free:    false,
       symbols: ["🍕","🍔","🌮","🍜","🍣","🧁","🍩","🍦","🥐","🍿"],
       desc:    "Chaotic and delicious. Hunger not included.",
+    },
+
+    // NEW EMOJIS
+    {
+      id:      "mythic",
+      name:    "Mythic Legends",
+      price:   180,
+      free:    false,
+      symbols: ["🐉","🦄","🧙","⚔️","🛡️","🔥","👑","🏰","🧝","🐲"],
+      desc:    "Fantasy creatures and legendary heroes collide.",
+    },
+    {
+      id:      "ocean",
+      name:    "Ocean Dive",
+      price:   130,
+      free:    false,
+      symbols: ["🐠","🐬","🦈","🐳","🐙","🪸","🌊","🦀","🐚","🪼"],
+      desc:    "A relaxing underwater adventure.",
+    },
+    {
+      id:      "sports",
+      name:    "Champion Arena",
+      price:   140,
+      free:    false,
+      symbols: ["⚽","🏀","🏈","🎾","🏐","🥊","🏆","🎯","🏓","⛳"],
+      desc:    "Competitive energy for true champions.",
+    },
+    {
+      id:      "weather",
+      name:    "Weather Chaos",
+      price:   110,
+      free:    false,
+      symbols: ["☀️","🌧️","⛈️","❄️","🌪️","🌈","☁️","🌤️","🌙","⚡"],
+      desc:    "Every forecast leads to a different combo.",
+    },
+    {
+      id:      "tech",
+      name:    "Tech World",
+      price:   170,
+      free:    false,
+      symbols: ["💻","📱","⌨️","🖥️","🧠","🤖","🔋","📡","🎧","🛰️"],
+      desc:    "Modern gadgets and futuristic tech icons.",
     },
   ],
 };
@@ -1274,10 +1358,10 @@ class PopMatchGame {
   }
 
   /** Called by Router each time the screen is entered */
-  mount() {
-     ShopModule.init();
-    this.symbols = ShopModule.getActiveSymbols(); // refresh symbols on each entry
-    ShopModule.applyActive();                     // apply saved color preset
+  async mount() {
+    await ShopModule.init();                      // ✅ wait for Firestore inventory to load
+    this.symbols = ShopModule.getActiveSymbols(); // now reads the correct saved preset
+    ShopModule.applyActive();
     this.resetFullGame();
     this.createBoard();
     this.bindEvents();
@@ -1411,33 +1495,19 @@ class PopMatchGame {
    */
   async _awardStageCredits(stage) {
     if (!State.user || !State.userData) return;
-
     const baseReward = POP_MATCH_CONFIG.STAGE_REWARDS[stage] ?? 0;
     if (baseReward <= 0) return;
-
-    // Fetch how many full runs done today (only matters on stage 5 clear)
-    // We still pay per-stage but multiplier is determined by completed runs so far
-    const dailyRuns  = await DB.getPopMatchDailyRuns(State.user.uid);
+    const dailyRuns   = await DB.getPopMatchDailyRuns(State.user.uid);
     const multipliers = POP_MATCH_CONFIG.RUN_MULTIPLIERS;
     const multiplier  = multipliers[Math.min(dailyRuns, multipliers.length - 1)];
-
-    const actual = Math.max(1, Math.round(baseReward * multiplier));
-
-    await CreditsModule.add(actual);
-    $("match-credits").textContent = Math.floor(State.userData.credits);
-
-    // On final stage clear, increment the daily run counter
-    if (stage === this.maxStages) {
-      await DB.incrementPopMatchDailyRuns(State.user.uid);
-    }
-
-    // Build toast message
+    const actual      = Math.max(1, Math.round(baseReward * multiplier));
+    await CreditsModule.add(actual);  // handles all display updates
+    if (stage === this.maxStages) await DB.incrementPopMatchDailyRuns(State.user.uid);
     const runLabel = ["1st", "2nd", "3rd"];
     const label    = dailyRuns < 3 ? runLabel[dailyRuns] : `${dailyRuns + 1}th`;
     const note     = multiplier < 1
       ? ` (${label} run today · ${Math.round(multiplier * 100)}% rewards)`
       : ` (1st run today · full rewards!)`;
-
     setTimeout(() => Toast.show(`+${actual} credits${note}`, "success"), 200);
   }
 
@@ -1447,7 +1517,8 @@ class PopMatchGame {
     clearInterval(this.state.interval);
     this.currentStage = 1;
     this.stageEl.textContent = "1";
-    Object.assign(this.state, { score: 0, combo: 0, matches: 0, running: false });
+    const initConfig = this.getStageConfig(1);
+    Object.assign(this.state, { score: 0, combo: 0, matches: 0, running: false, timer: initConfig.time });
     this.isProcessing = false;
     this.updateUI();
   }
@@ -1469,8 +1540,13 @@ class PopMatchGame {
     this.state.interval = setInterval(() => {
       if (!this.state.running) return;
       this.state.timer--;
-      this.timerEl.textContent = this.state.timer;
-      if (this.state.timer <= 0) this.endGame(false);
+      if (this.state.timer <= 0) {
+        this.state.timer = 0;
+        this.updateUI();
+        this.endGame(false);
+        return;
+      }
+      this.updateUI();
     }, 1000);
   }
 
