@@ -1801,6 +1801,15 @@ html, body {
   margin-bottom: 10px;
 }
 
+.pm-stats-info {
+  padding: 5px;
+}
+.pm-stage-stats {
+  /* border: 1px solid red; */
+  margin: 0;
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+
 .pm-credit-info-stage {
   background: var(--panel);
   border: 1px solid var(--border);
