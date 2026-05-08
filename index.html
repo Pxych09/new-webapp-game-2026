@@ -546,63 +546,8 @@
 
     </div><!-- /game-layout -->
   </div>
-
-  <!-- ── POP MATCH SHOP MODAL ── -->
-  <div id="pm-shop-overlay" class="pm-shop-overlay"></div>
-    <div id="pm-shop-modal" class="pm-shop-modal hidden">
-      <div class="pm-shop-panel">
-
-        <!-- Header -->
-        <div class="pm-shop-header">
-          <div class="pm-shop-title-row">
-            <span>🛍️</span>
-            <h2 class="pm-shop-title">PRESET SHOP</h2>
-            <div class="pm-shop-balance">
-              <span class="credits-label">YOUR CREDITS</span>
-              <span id="pm-shop-credits" class="credits-val">—</span>
-            </div>
-          </div>
-          <button id="pm-shop-close" class="pm-shop-close">✕</button>
-        </div>
-
-        <!-- Tabs -->
-        <div class="lb-tabs pm-shop-tabs">
-          <button id="pm-shop-tab-color" class="lb-tab lb-tab-active">🎨 Color Themes</button>
-          <button id="pm-shop-tab-emoji" class="lb-tab">😀 Emoji Packs</button>
-        </div>
-
-        <!-- Message toast -->
-        <div id="pm-shop-msg" class="pm-shop-msg"></div>
-
-        <!-- Preview confirmation bar -->
-        <div id="pm-shop-preview-bar" class="pm-shop-preview-bar hidden">
-          <span class="pm-shop-preview-label">👁 Preview active — happy with it?</span>
-          <div class="pm-shop-preview-actions">
-            <button id="pm-shop-preview-confirm" class="btn btn-primary btn-sm">✅ Buy &amp; Equip</button>
-            <button id="pm-shop-preview-cancel"  class="btn btn-sm">✕ Cancel</button>
-          </div>
-        </div>
-
-        <!-- Color section -->
-        <div id="pm-shop-section-color" class="pm-shop-section">
-          <p class="pm-shop-section-desc">
-            Changes card borders, matched card color, and board glow.
-            Hover to preview live on the board before buying.
-          </p>
-          <div id="pm-shop-color-grid" class="pm-shop-grid"></div>
-        </div>
-
-        <!-- Emoji section -->
-        <div id="pm-shop-section-emoji" class="pm-shop-section hidden">
-          <p class="pm-shop-section-desc">
-            Replaces the symbols on all cards. Takes effect on your next game start.
-          </p>
-          <div id="pm-shop-emoji-grid" class="pm-shop-grid"></div>
-        </div>
-
-      </div>
-    </div>
-
+<!-- ── GLOBAL TOAST ── -->
+<div id="pm-toast" class="pm-toast hidden"></div>
   <!-- ── POP MATCH GAME ──────────────────────────────── -->
   <div id="screen-match" class="screen">
     <header class="top-bar">
@@ -624,6 +569,63 @@
     <div class="pm-scanlines"></div>
 
     <main class="pm-container">
+
+      <!-- ── INLINE SHOP PANEL ── -->
+      <div id="pm-shop-panel" class="pm-shop-panel hidden">
+
+        <div class="pm-shop-inner">
+
+          <!-- Header -->
+          <div class="pm-shop-header">
+            <div class="pm-shop-title-row">
+              <span class="pm-shop-title">🛍️ PRESET SHOP</span>
+            </div>
+            <button id="pm-shop-close" class="pm-shop-close-btn">✕ Close</button>
+          </div>
+
+          <!-- Tabs -->
+          <div class="pm-shop-tabs">
+            <button id="pm-shop-tab-color" class="pm-shop-tab pm-shop-tab-active">🎨 Color Themes</button>
+            <button id="pm-shop-tab-emoji" class="pm-shop-tab">😀 Emoji Packs</button>
+          </div>
+
+          <!-- Message toast -->
+          <div id="pm-shop-msg" class="pm-shop-msg"></div>
+
+          <!-- Color section -->
+          <div id="pm-shop-section-color" class="pm-shop-section">
+            <p class="pm-shop-section-desc">
+              Changes card borders, matched card color, and board glow.
+              Hover to preview live on the board below.
+            </p>
+            <div id="pm-shop-color-grid" class="pm-shop-grid"></div>
+          </div>
+
+          <!-- Emoji section -->
+          <div id="pm-shop-section-emoji" class="pm-shop-section hidden">
+            <p class="pm-shop-section-desc">
+              Replaces the symbols on all cards. Takes effect on your next game start.
+            </p>
+            <div id="pm-shop-emoji-grid" class="pm-shop-grid"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── CONFIRM DIALOG ── -->
+      <div id="pm-confirm-overlay" class="pm-confirm-overlay hidden">
+        <div class="pm-confirm-box">
+          <div class="pm-confirm-icon">🛒</div>
+          <h3 class="pm-confirm-title" id="pm-confirm-title">Confirm Purchase</h3>
+          <p class="pm-confirm-body" id="pm-confirm-body"></p>
+          <div class="pm-confirm-actions">
+            <button id="pm-confirm-yes" class="btn btn-primary">✅ Yes, Buy It!</button>
+            <button id="pm-confirm-no"  class="btn">✕ Cancel</button>
+          </div>
+        </div>
+      </div>
+
+  <!-- existing pm-shell stays here unchanged -->
       <div class="pm-shell">
         <div class="pm-game">
           <h1 class="pm-title">POP MATCH</h1>
