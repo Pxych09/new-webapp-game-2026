@@ -145,9 +145,10 @@ const PM_PRESETS = {
 };
 
 const POP_MATCH_CONFIG = {
-  STAGE_REWARDS:   [0, 2, 4, 7, 12, 20], // index = stage number (index 0 unused)
-  DAILY_CAP:       50,                    // max credits earnable from Pop Match per day
+  STAGE_REWARDS:     [0, 2, 4, 7, 12, 20], // index = stage number
+  RUN_MULTIPLIERS:   [1.0, 0.6, 0.3, 0.1], // 1st, 2nd, 3rd, 4th+ run of the day
 };
+
 
 // ═══════════════════════════════════════════════════
 // FRUITS CONFIG (Weights for spinning probability)
@@ -401,33 +402,30 @@ const DB = {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
   /**
-   * Get how many Pop Match credits this user has earned today.
-   * Stored in users/{uid}.popMatchCreditsToday and popMatchCapDate.
+   * Get how many full Pop Match clears the user has done today.
+   * Resets automatically when the stored date is a previous day.
    */
-  async getPopMatchDailyEarned(uid) {
+  async getPopMatchDailyRuns(uid) {
     const data = await DB.getUser(uid);
     if (!data) return 0;
 
-    const capDate = data.popMatchCapDate;
+    const capDate = data.popMatchRunDate;
     if (!capDate) return 0;
 
-    // Reset if the stored date is from a previous day
-    const stored  = capDate.toDate ? capDate.toDate() : new Date(capDate);
-    const todayStr = new Date().toDateString();
-    if (stored.toDateString() !== todayStr) return 0;
+    const stored = capDate.toDate ? capDate.toDate() : new Date(capDate);
+    if (stored.toDateString() !== new Date().toDateString()) return 0;
 
-    return data.popMatchCreditsToday || 0;
+    return data.popMatchDailyRuns || 0;
   },
 
   /**
-   * Increment the user's Pop Match daily earned counter.
-   * Also stamps the date so it auto-resets the next calendar day.
+   * Increment the daily run counter and stamp today's date.
    */
-  async incrementPopMatchDailyEarned(uid, amount) {
-    const current = await DB.getPopMatchDailyEarned(uid);
+  async incrementPopMatchDailyRuns(uid) {
+    const current = await DB.getPopMatchDailyRuns(uid);
     await updateDoc(DB.userRef(uid), {
-      popMatchCreditsToday: current + amount,
-      popMatchCapDate:      new Date(),
+      popMatchDailyRuns: current + 1,
+      popMatchRunDate:   new Date(),
     });
   },
   async getInventory(uid) {
@@ -1160,7 +1158,7 @@ const ShopModule = (() => {
       else if (isPrev)    badge = `<span class="pm-shop-badge previewing">👁 PREVIEWING</span>`;
       else if (owned)     badge = `<span class="pm-shop-badge owned">OWNED</span>`;
       else if (preset.free) badge = `<span class="pm-shop-badge free">FREE</span>`;
-      else                badge = `<span class="pm-shop-badge price">💰 ${preset.price} cr</span>`;
+      else                badge = `<span class="pm-shop-badge price" style="display: none;">${preset.price} cr</span>`;
 
       // Action button — shown below the badge
       // • Already equipped  → no button (it IS active)
@@ -1171,7 +1169,7 @@ const ShopModule = (() => {
       if (!isActive) {
         if (owned || preset.free) {
           actionBtn = `<button class="pm-shop-action-btn pm-shop-equip-btn" data-id="${preset.id}" data-type="${type}">
-            ✓ Equip
+            Equip
           </button>`;
         } else {
           actionBtn = `<button class="pm-shop-action-btn pm-shop-buy-btn" data-id="${preset.id}" data-type="${type}">
@@ -1414,33 +1412,33 @@ class PopMatchGame {
   async _awardStageCredits(stage) {
     if (!State.user || !State.userData) return;
 
-    const reward   = POP_MATCH_CONFIG.STAGE_REWARDS[stage] ?? 0;
-    if (reward <= 0) return;
+    const baseReward = POP_MATCH_CONFIG.STAGE_REWARDS[stage] ?? 0;
+    if (baseReward <= 0) return;
 
-    const earned   = await DB.getPopMatchDailyEarned(State.user.uid);
-    const canEarn  = POP_MATCH_CONFIG.DAILY_CAP - earned;
+    // Fetch how many full runs done today (only matters on stage 5 clear)
+    // We still pay per-stage but multiplier is determined by completed runs so far
+    const dailyRuns  = await DB.getPopMatchDailyRuns(State.user.uid);
+    const multipliers = POP_MATCH_CONFIG.RUN_MULTIPLIERS;
+    const multiplier  = multipliers[Math.min(dailyRuns, multipliers.length - 1)];
 
-    if (canEarn <= 0) {
-      // Cap reached — show a soft message but don't break the game flow
-      setTimeout(() =>
-        this.showMessage(`Stage ${stage} clear! (Daily cap reached)`, ""), 200);
-      return;
-    }
+    const actual = Math.max(1, Math.round(baseReward * multiplier));
 
-    const actual = Math.min(reward, canEarn);
-
-    // Update credits via the shared module (writes to Firestore + updates UI)
     await CreditsModule.add(actual);
-
-    // Update the Pop Match credits display in the top bar
     $("match-credits").textContent = Math.floor(State.userData.credits);
 
-    // Record against the daily cap
-    await DB.incrementPopMatchDailyEarned(State.user.uid, actual);
+    // On final stage clear, increment the daily run counter
+    if (stage === this.maxStages) {
+      await DB.incrementPopMatchDailyRuns(State.user.uid);
+    }
 
-    const capNote = actual < reward ? ` (cap: +${actual})` : "";
-    setTimeout(() =>
-      this.showMessage(`+${actual} credits earned!${capNote}`, "success"), 200);
+    // Build toast message
+    const runLabel = ["1st", "2nd", "3rd"];
+    const label    = dailyRuns < 3 ? runLabel[dailyRuns] : `${dailyRuns + 1}th`;
+    const note     = multiplier < 1
+      ? ` (${label} run today · ${Math.round(multiplier * 100)}% rewards)`
+      : ` (1st run today · full rewards!)`;
+
+    setTimeout(() => Toast.show(`+${actual} credits${note}`, "success"), 200);
   }
 
   startNewGame()  { this.resetFullGame(); this.startNextStage(); }
