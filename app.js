@@ -5,6 +5,38 @@
  * Avatars: PokéAPI (first 151 Pokémon)
  */
 
+// MY CURRENT FIREBASE RULES
+/**
+ * rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+ 
+    // Users can read/write their own doc only
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null; // needed for leaderboard reads
+    }
+ 
+    // Usernames collection: anyone authenticated can check if a username exists
+    // Only the creating user can write (set) their username reservation
+    match /usernames/{username} {
+      allow read: if true; // public read for availability checks during sign-up
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false; // usernames are permanent
+    }
+ 
+    // Spins: users can create and read their own spin records
+    match /spins/{spinId} {
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid;
+      allow read: if request.auth != null
+                  && resource.data.uid == request.auth.uid;
+    }
+  }
+}
+ */
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getAuth,
@@ -321,21 +353,15 @@ const DB = {
   // FIX #2: Query only the current user's captures to respect Firestore security rules.
   // If you want a global leaderboard of captures, update Firestore rules to allow
   // authenticated reads on the captures collection (no uid filter needed in rules).
-  async getRecentCaptures(count = 3) {
-    const uid = State.user?.uid;
-    if (!uid) return [];
-    // Query scoped to the current user — always permitted by standard rules.
-    // To show ALL players' captures, update Firestore rules:
-    //   match /captures/{doc} { allow read: if request.auth != null; }
-    const q = query(
-      capturesCol(),
-      where("uid", "==", uid),
-      orderBy("createdAt", "desc"),
-      limit(count)
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  },
+async getRecentCaptures(count = 3) {
+  const q = query(
+    capturesCol(),
+    orderBy("createdAt", "desc"),
+    limit(count)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+},
   async getLeaderboard(n = 20) {
     const q = query(collection(db, "users"), orderBy("coins", "desc"), limit(n));
     const snap = await getDocs(q);
