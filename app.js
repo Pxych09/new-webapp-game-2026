@@ -35,7 +35,6 @@ const FIREBASE_CONFIG = {
 //  CONSTANTS
 // ═══════════════════════════════════════════════════
 
-// Pokémon avatar config — first 151 (Gen 1), 6 per page
 const POKE_COUNT      = 151;
 const POKE_PER_PAGE   = 6;
 const POKE_SPRITE_URL    = (id) =>
@@ -81,14 +80,10 @@ const LUCKY_PARTIAL_WIN = 5;
 const DAILY_REWARD = 100;
 const MS_PER_DAY   = 86_400_000;
 
-// ── CAPTURE A POKÉMON ──
 const CAPTURE_COST       = 500;
 const CAPTURE_BALL_COUNT = 5;
-
-// Full Gen-1 roster (IDs 1–151) for the capture pool
 const CAPTURE_POOL = Array.from({ length: 151 }, (_, i) => i + 1);
 
-// Static Gen-1 name list (index 0 unused so IDs are 1-based)
 const POKE_NAMES = [
   "","bulbasaur","ivysaur","venusaur","charmander","charmeleon","charizard","squirtle","wartortle",
   "blastoise","caterpie","metapod","butterfree","weedle","kakuna","beedrill","pidgey","pidgeotto",
@@ -117,7 +112,6 @@ const pokeName = (id) => {
 const toEmail = (username) => `${username.toLowerCase()}@arcade2026.local`;
 const PW_REGEX = /^[a-zA-Z0-9]{8}$/;
 
-// Default avatar for new accounts (Pikachu)
 const DEFAULT_AVATAR = { type:"pokemon", id:25, name:"pikachu" };
 
 // ═══════════════════════════════════════════════════
@@ -154,9 +148,9 @@ const fmt = {
   timeAgo: (d) => {
     if (!(d instanceof Date)) return "just now";
     const s = Math.floor((Date.now() - d.getTime()) / 1000);
-    if (s < 60)   return "just now";
-    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-    if (s < 86400)return `${Math.floor(s / 3600)}h ago`;
+    if (s < 60)    return "just now";
+    if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
     return `${Math.floor(s / 86400)}d ago`;
   },
 };
@@ -324,9 +318,21 @@ const DB = {
     const snap = await getDocs(q);
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
-  // Recent captures across ALL players — for dashboard candidates section
+  // FIX #2: Query only the current user's captures to respect Firestore security rules.
+  // If you want a global leaderboard of captures, update Firestore rules to allow
+  // authenticated reads on the captures collection (no uid filter needed in rules).
   async getRecentCaptures(count = 3) {
-    const q = query(capturesCol(), orderBy("createdAt", "desc"), limit(count));
+    const uid = State.user?.uid;
+    if (!uid) return [];
+    // Query scoped to the current user — always permitted by standard rules.
+    // To show ALL players' captures, update Firestore rules:
+    //   match /captures/{doc} { allow read: if request.auth != null; }
+    const q = query(
+      capturesCol(),
+      where("uid", "==", uid),
+      orderBy("createdAt", "desc"),
+      limit(count)
+    );
     const snap = await getDocs(q);
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
@@ -460,14 +466,27 @@ const Screens = {
     });
     cls.toggle($("app"), "hidden", id !== "app");
   },
+  // FIX #1: Added a fallback timeout so if the splash animationend never fires
+  // (e.g. animation already completed on fast auth, or browser skips it),
+  // the callback still runs after a safe maximum delay.
   splashOut(cb) {
     const el = $("screen-splash");
-    if (!el) { cb(); return; }
-    cls.add(el, "fade-out");
-    el.addEventListener("animationend", () => {
+    if (!el || !cls.has(el, "active")) {
+      // Splash isn't even visible — just run the callback immediately
+      cb();
+      return;
+    }
+    let called = false;
+    const done = () => {
+      if (called) return;
+      called = true;
       cls.remove(el, "active", "fade-out");
       cb();
-    }, { once: true });
+    };
+    cls.add(el, "fade-out");
+    el.addEventListener("animationend", done, { once: true });
+    // Fallback: if animationend never fires within 1s, force it
+    setTimeout(done, 1000);
   },
 };
 
@@ -628,11 +647,23 @@ const PokemonPicker = (() => {
   };
 
   const init = (currentAvatar) => {
+    _page     = 0;
     _selected = currentAvatar?.type === "pokemon" ? currentAvatar : null;
     if (_selected) _page = Math.floor((_selected.id - 1) / POKE_PER_PAGE);
     render();
-    $("btn-pokemon-prev")?.addEventListener("click", () => { if (_page > 0) { _page--; render(); } });
-    $("btn-pokemon-next")?.addEventListener("click", () => { if (_page < totalPages - 1) { _page++; render(); } });
+    // Remove old listeners by cloning the buttons
+    const prev = $("btn-pokemon-prev");
+    const next = $("btn-pokemon-next");
+    if (prev) {
+      const newPrev = prev.cloneNode(true);
+      prev.parentNode.replaceChild(newPrev, prev);
+      newPrev.addEventListener("click", () => { if (_page > 0) { _page--; render(); } });
+    }
+    if (next) {
+      const newNext = next.cloneNode(true);
+      next.parentNode.replaceChild(newNext, next);
+      newNext.addEventListener("click", () => { if (_page < totalPages - 1) { _page++; render(); } });
+    }
   };
 
   const refresh = (currentAvatar) => {
@@ -652,6 +683,11 @@ const PokemonPicker = (() => {
 
 const ProfilePage = {
   _initialized: false,
+
+  // FIX #6: Reset _initialized on sign-out so PokemonPicker.init() runs fresh on next login
+  reset() {
+    this._initialized = false;
+  },
 
   init() {
     $("btn-signout")?.addEventListener("click", () => {
@@ -706,7 +742,6 @@ const ProfilePage = {
     }
 
     wrap.innerHTML = "";
-    // Sort by id ascending for a nice Pokédex-like order
     const sorted = [...collection].sort((a, b) => a.id - b.id);
     sorted.forEach(({ id, name }) => {
       const card = document.createElement("div");
@@ -775,7 +810,6 @@ const DashPage = {
     }
   },
 
-  // ── Pokémon Candidates — recent captures across all players ──
   async loadPokemonCandidates() {
     const list = $("pokemon-candidates-list");
     if (!list) return;
@@ -1154,36 +1188,37 @@ const LuckyGame = {
 // ═══════════════════════════════════════════════════
 
 const CaptureGame = {
-  _pickedBall:    null,  // index 0–4 of which ball the player chose
-  _revealedPoke:  null,  // { id, name } of the revealed Pokémon
+  _pickedBall:    null,
+  _revealedPoke:  null,
+  // FIX #7: Track whether the current throw was free before persisting
+  _wasFreeThrow:  false,
 
   init() {
-    $("open-capture")?.addEventListener("click",   () => this.open());
-    $("back-capture")?.addEventListener("click",   () => this._closeOverlay());
+    $("open-capture")?.addEventListener("click",     () => this.open());
+    $("back-capture")?.addEventListener("click",     () => this._closeOverlay());
     $("btn-buy-pokeball")?.addEventListener("click", () => this._buyPokeball());
-    $("btn-capture-again")?.addEventListener("click", () => this._resetForNewThrow());
+    $("btn-capture-again")?.addEventListener("click",() => this._resetForNewThrow());
   },
 
-  // ── daily free ball logic ──
   _captureLastClaim() { return toDate(State.userData?.captureLastClaimAt); },
   _canClaimFreeBall() {
     const l = this._captureLastClaim();
     return !l || Date.now() - l.getTime() >= MS_PER_DAY;
   },
-  _hasFreeBalReady() {
-    // Free if never used today
-    return this._canClaimFreeBall() || !State.userData?.captureUsed;
-  },
   _isBallAvailable() {
-    // Ball available if: (free daily not yet used) OR (daily reset)
-    if (this._canClaimFreeBall()) return true;      // 24h passed — fresh free ball
-    return !State.userData?.captureUsed;            // same day but not yet used
+    if (this._canClaimFreeBall()) return true;
+    return !State.userData?.captureUsed;
   },
 
   open() {
     cls.remove($("overlay-capture"), "hidden");
-    this._pickedBall   = null;
-    this._revealedPoke = null;
+    // FIX #9: Always reset state when opening overlay
+    this._pickedBall    = null;
+    this._revealedPoke  = null;
+    this._wasFreeThrow  = false;
+    // Hide the reveal panel if it was left visible
+    const revealEl = $("capture-reveal");
+    if (revealEl) cls.add(revealEl, "hidden");
     this._refreshCoins();
     this._renderState();
   },
@@ -1192,6 +1227,7 @@ const CaptureGame = {
     cls.add($("overlay-capture"), "hidden");
     this._pickedBall   = null;
     this._revealedPoke = null;
+    this._wasFreeThrow = false;
   },
 
   _refreshCoins() {
@@ -1199,7 +1235,6 @@ const CaptureGame = {
     if (el) el.textContent = fmt.coins(Coins.get());
   },
 
-  // Decide what the overlay should show and render it
   _renderState() {
     const ballAvailable = this._isBallAvailable();
     const statusEl  = $("capture-status");
@@ -1207,11 +1242,9 @@ const CaptureGame = {
     const revealEl  = $("capture-reveal");
     const buyWrap   = $("capture-buy-wrap");
 
-    // Hide reveal panel by default
     if (revealEl) cls.add(revealEl, "hidden");
 
     if (ballAvailable) {
-      // Show balls, hide buy CTA
       if (statusEl) {
         statusEl.innerHTML = `
           <span class="capture-status-badge free">
@@ -1222,13 +1255,12 @@ const CaptureGame = {
       if (ballsWrap) { cls.remove(ballsWrap, "hidden"); this._renderBalls(true); }
       if (buyWrap)   cls.add(buyWrap, "hidden");
     } else {
-      // Ball used — show buy CTA + countdown
       if (ballsWrap) cls.add(ballsWrap, "hidden");
       if (buyWrap)   cls.remove(buyWrap, "hidden");
       if (statusEl) {
-        const ms   = MS_PER_DAY - (Date.now() - this._captureLastClaim().getTime());
-        const h    = Math.floor(ms / 3600000);
-        const m    = Math.floor((ms % 3600000) / 60000);
+        const ms = MS_PER_DAY - (Date.now() - this._captureLastClaim().getTime());
+        const h  = Math.floor(ms / 3600000);
+        const m  = Math.floor((ms % 3600000) / 60000);
         statusEl.innerHTML = `
           <span class="capture-status-badge used">
             <i class="bi bi-check-circle-fill"></i> TODAY'S FREE THROW USED
@@ -1266,11 +1298,11 @@ const CaptureGame = {
     if (this._pickedBall !== null || State.captureRevealing) return;
     State.captureRevealing = true;
     this._pickedBall = idx;
+    // FIX #7: Record whether this is a free throw BEFORE persisting
+    this._wasFreeThrow = this._canClaimFreeBall();
 
-    // Disable all balls immediately
     document.querySelectorAll(".pokeball-btn").forEach(b => b.disabled = true);
 
-    // Shake animation on picked ball
     const pickedEl = document.querySelector(`.pokeball-btn[data-idx="${idx}"]`);
     if (pickedEl) {
       cls.add(pickedEl, "shaking");
@@ -1280,19 +1312,14 @@ const CaptureGame = {
       await sleep(200);
     }
 
-    // Pick a random Pokémon from Gen 1
-    const pokeId   = CAPTURE_POOL[Math.floor(Math.random() * CAPTURE_POOL.length)];
+    const pokeId    = CAPTURE_POOL[Math.floor(Math.random() * CAPTURE_POOL.length)];
     const pokeName_ = pokeName(pokeId);
     this._revealedPoke = { id: pokeId, name: pokeName_ };
 
-    // Fetch flavor text from PokéAPI
     const flavorText = await this._fetchFlavorText(pokeId);
     const types      = await this._fetchTypes(pokeId);
 
-    // Show reveal panel
     await this._showReveal(pokeId, pokeName_, flavorText, types);
-
-    // Persist — mark ball used and save to collection
     await this._persist(pokeId, pokeName_);
 
     State.captureRevealing = false;
@@ -1302,7 +1329,6 @@ const CaptureGame = {
     try {
       const res  = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
       const data = await res.json();
-      // Find first English flavor text
       const entry = data.flavor_text_entries?.find(e => e.language.name === "en");
       return entry
         ? entry.flavor_text.replace(/\f|\n/g, " ").replace(/\s+/g, " ").trim()
@@ -1323,11 +1349,12 @@ const CaptureGame = {
   },
 
   async _showReveal(id, name, flavorText, types) {
-    const revealEl = $("capture-reveal");
+    // FIX #3: Use the single #capture-reveal inside #pokeballs-wrap, not the duplicate
+    const revealEl  = $("capture-reveal");
     const ballsWrap = $("pokeballs-wrap");
+    const buyWrap   = $("capture-buy-wrap");
     if (!revealEl) return;
 
-    // Build type badge HTML
     const typeBadges = types.map(t =>
       `<span class="poke-type-badge poke-type-${t}">${t}</span>`
     ).join("");
@@ -1355,8 +1382,9 @@ const CaptureGame = {
         </div>
       </div>`;
 
-    // Hide balls, show reveal
+    // Hide balls and buy wrap, show reveal
     if (ballsWrap) cls.add(ballsWrap, "hidden");
+    if (buyWrap)   cls.add(buyWrap, "hidden");
     cls.remove(revealEl, "hidden");
     cls.add(revealEl, "reveal-enter");
 
@@ -1365,6 +1393,10 @@ const CaptureGame = {
 
     await sleep(600);
     cls.remove(revealEl, "reveal-enter");
+
+    // Show the "throw again" button after reveal
+    const againWrap = $("capture-again-wrap");
+    if (againWrap) cls.remove(againWrap, "hidden");
   },
 
   async _persist(pokeId, pokeName_) {
@@ -1372,8 +1404,6 @@ const CaptureGame = {
 
     const now        = new Date();
     const collection = State.userData.pokemonCollection || [];
-
-    // Only add if not already in collection (no duplicates by id)
     const alreadyHave = collection.some(p => p.id === pokeId);
     const newCollection = alreadyHave
       ? collection
@@ -1393,18 +1423,16 @@ const CaptureGame = {
       captureLastClaimAt: now,
     });
 
+    // FIX #7: Use the pre-recorded _wasFreeThrow flag — captured BEFORE updating state
     DB.logCapture(
       State.user.uid,
       State.userData.username || "Trainer",
       pokeId,
       pokeName_,
-      this._canClaimFreeBall() ? 0 : CAPTURE_COST
+      this._wasFreeThrow ? 0 : CAPTURE_COST
     ).catch(() => {});
 
     this._refreshCoins();
-    // Update capture-coins-display
-    const el = $("capture-coins-display");
-    if (el) el.textContent = fmt.coins(Coins.get());
   },
 
   async _buyPokeball() {
@@ -1423,7 +1451,6 @@ const CaptureGame = {
       return;
     }
 
-    // Reset captureUsed so player can throw again
     State.userData.captureUsed = false;
     await DB.updateUser(State.user.uid, { captureUsed: false, coins: State.userData.coins });
 
@@ -1432,22 +1459,24 @@ const CaptureGame = {
 
     if (btn) { btn.disabled = false; btn.innerHTML = `<i class="bi bi-bag-fill"></i> BUY POKÉBALL — 500 coins`; }
 
-    // Re-render to show the ball selection
     this._pickedBall   = null;
     this._revealedPoke = null;
+    this._wasFreeThrow = false;
     const revealEl = $("capture-reveal");
     if (revealEl) cls.add(revealEl, "hidden");
+    const againWrap = $("capture-again-wrap");
+    if (againWrap) cls.add(againWrap, "hidden");
     this._renderState();
   },
 
   _resetForNewThrow() {
-    // Only reachable after a reveal — hides reveal and goes back to buy CTA
-    const revealEl  = $("capture-reveal");
-    const buyWrap   = $("capture-buy-wrap");
-    const statusEl  = $("capture-status");
-    if (revealEl) cls.add(revealEl, "hidden");
     this._pickedBall   = null;
     this._revealedPoke = null;
+    this._wasFreeThrow = false;
+    const revealEl  = $("capture-reveal");
+    if (revealEl) cls.add(revealEl, "hidden");
+    const againWrap = $("capture-again-wrap");
+    if (againWrap) cls.add(againWrap, "hidden");
     this._renderState();
   },
 };
@@ -1474,7 +1503,6 @@ const Sound = (() => {
     bomb:     () => tone(110, .3, "sawtooth", .09),
     reelSpin: () => tone(700, .07, "sawtooth", .04),
     capture:  () => {
-      // Ascending "capture" sound — three rising tones
       try {
         const c = ctx();
         [600, 900, 1200].forEach((f, i) => {
@@ -1530,6 +1558,8 @@ const Auth = {
   onSignedOut() {
     State.user = State.userData = null;
     Daily.stop();
+    // FIX #6: Reset profile page so PokemonPicker re-initializes on next login
+    ProfilePage.reset();
     cls.add($("overlay-fruit"),   "hidden");
     cls.add($("overlay-lucky"),   "hidden");
     cls.add($("overlay-capture"), "hidden");
