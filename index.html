@@ -3,31 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Arcade 2026 — Browser-based retro arcade games. Spin. Match. Win." />
+  <meta name="description" content="Arcade 2026 — Browser-based retro arcade games. Spin. Match. Capture." />
   <title>Web Arcade 2026</title>
   <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/706/706023.png" type="image/png">
-
-  <!-- Bootstrap 5 CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
-  <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-  <!-- Twemoji (emoji CDN) -->
-  <script src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js" crossorigin="anonymous"></script>
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet" />
-  <!-- App styles -->
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <!-- ══════════════════════════════════════════
-       SPLASH SCREEN
-  ══════════════════════════════════════════ -->
   <div id="screen-splash" class="screen active">
     <div class="splash-core">
       <div class="splash-scanlines"></div>
       <div class="splash-logo">
+        <img src="https://cdn-icons-png.flaticon.com/512/706/706023.png" alt="Arcade Logo" class="splash-logo-img" />
         <span class="splash-glitch" data-text="ARCADE">ARCADE</span>
         <span class="splash-year">2026</span>
       </div>
@@ -38,135 +29,73 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════
-       AUTH SCREEN
-  ══════════════════════════════════════════ -->
   <div id="screen-signin" class="screen">
-    <div class="signin-bg">
-      <div class="signin-grid"></div>
-    </div>
-
+    <div class="signin-bg"><div class="signin-grid"></div></div>
     <div class="signin-card">
-      <!-- Brand -->
       <div class="signin-logo">
-        <i class="bi bi-controller signin-logo-icon"></i>
-        <h1 class="signin-logo-title">ARCADE<span>2026</span></h1>
+        <img src="https://cdn-icons-png.flaticon.com/512/706/706023.png" alt="Arcade Logo" class="signin-logo-img" />
+        <div>
+          <h1 class="signin-logo-title">ARCADE<span>2026</span></h1>
+        </div>
       </div>
-      <p class="signin-tagline">Spin. Match. Win. Repeat.</p>
-
-      <!-- Tab switcher -->
+      <p class="signin-tagline">Spin. Match. Win. Capture.</p>
       <div class="auth-tabs">
-        <button class="auth-tab active" id="tab-login" data-tab="login">
-          <i class="bi bi-box-arrow-in-right"></i> LOGIN
-        </button>
-        <button class="auth-tab" id="tab-signup" data-tab="signup">
-          <i class="bi bi-person-plus"></i> SIGN UP
-        </button>
+        <button class="auth-tab active" id="tab-login" data-tab="login"><i class="bi bi-box-arrow-in-right"></i> LOGIN</button>
+        <button class="auth-tab" id="tab-signup" data-tab="signup"><i class="bi bi-person-plus"></i> SIGN UP</button>
       </div>
-
-      <!-- LOGIN FORM -->
       <div id="form-login" class="auth-form">
         <div class="field-group">
-          <label class="field-label" for="login-username">
-            <i class="bi bi-person"></i> USERNAME
-          </label>
-          <input id="login-username" class="field-input" type="text" maxlength="25"
-                 placeholder="Enter your username…" autocomplete="username" />
+          <label class="field-label" for="login-username"><i class="bi bi-person"></i> USERNAME</label>
+          <input id="login-username" class="field-input" type="text" maxlength="25" placeholder="Enter your username…" autocomplete="username" />
         </div>
         <div class="field-group">
-          <label class="field-label" for="login-password">
-            <i class="bi bi-lock"></i> PASSWORD
-          </label>
+          <label class="field-label" for="login-password"><i class="bi bi-lock"></i> PASSWORD</label>
           <div class="pw-wrap">
-            <input id="login-password" class="field-input" type="password" maxlength="8"
-                   placeholder="Enter your password…" autocomplete="current-password" />
-            <button class="pw-toggle" data-target="login-password" type="button" tabindex="-1">
-              <i class="bi bi-eye" id="pw-icon-login"></i>
-            </button>
+            <input id="login-password" class="field-input" type="password" maxlength="8" placeholder="Enter your password…" autocomplete="current-password" />
+            <button class="pw-toggle" data-target="login-password" type="button" tabindex="-1"><i class="bi bi-eye" id="pw-icon-login"></i></button>
           </div>
         </div>
-        <button id="btn-login" class="btn-auth">
-          <i class="bi bi-lightning-charge-fill"></i> LOGIN
-        </button>
-        <div id="login-error" class="auth-error hidden">
-          <i class="bi bi-exclamation-triangle-fill"></i>
-          <span id="login-error-msg"></span>
-        </div>
+        <button id="btn-login" class="btn-auth"><i class="bi bi-lightning-charge-fill"></i> LOGIN</button>
+        <div id="login-error" class="auth-error hidden"><i class="bi bi-exclamation-triangle-fill"></i><span id="login-error-msg"></span></div>
       </div>
-
-      <!-- SIGN UP FORM -->
       <div id="form-signup" class="auth-form hidden">
         <div class="field-group">
-          <label class="field-label" for="signup-username">
-            <i class="bi bi-person"></i> USERNAME
-          </label>
-          <input id="signup-username" class="field-input" type="text" maxlength="25"
-                 placeholder="Choose a username…" autocomplete="username" />
-          <span class="field-hint">
-            <i class="bi bi-info-circle"></i> Max 25 characters, letters/numbers/underscores only
-          </span>
+          <label class="field-label" for="signup-username"><i class="bi bi-person"></i> USERNAME</label>
+          <input id="signup-username" class="field-input" type="text" maxlength="25" placeholder="Choose a username…" autocomplete="username" />
+          <span class="field-hint"><i class="bi bi-info-circle"></i> Max 25 characters, letters/numbers/underscores only</span>
         </div>
         <div class="field-group">
-          <label class="field-label" for="signup-password">
-            <i class="bi bi-lock"></i> PASSWORD
-          </label>
+          <label class="field-label" for="signup-password"><i class="bi bi-lock"></i> PASSWORD</label>
           <div class="pw-wrap">
-            <input id="signup-password" class="field-input" type="password" maxlength="8"
-                   placeholder="8 alphanumeric characters…" autocomplete="new-password" />
-            <button class="pw-toggle" data-target="signup-password" type="button" tabindex="-1">
-              <i class="bi bi-eye" id="pw-icon-signup"></i>
-            </button>
+            <input id="signup-password" class="field-input" type="password" maxlength="8" placeholder="8 alphanumeric characters…" autocomplete="new-password" />
+            <button class="pw-toggle" data-target="signup-password" type="button" tabindex="-1"><i class="bi bi-eye" id="pw-icon-signup"></i></button>
           </div>
-          <span class="field-hint">
-            <i class="bi bi-info-circle"></i> Exactly 8 alphanumeric characters (e.g. myPass25)
-          </span>
+          <span class="field-hint"><i class="bi bi-info-circle"></i> Exactly 8 alphanumeric characters (e.g. myPass25)</span>
         </div>
         <div class="field-group">
-          <label class="field-label" for="signup-password-confirm">
-            <i class="bi bi-lock-fill"></i> CONFIRM PASSWORD
-          </label>
+          <label class="field-label" for="signup-password-confirm"><i class="bi bi-lock-fill"></i> CONFIRM PASSWORD</label>
           <div class="pw-wrap">
-            <input id="signup-password-confirm" class="field-input" type="password" maxlength="8"
-                   placeholder="Repeat your password…" autocomplete="new-password" />
-            <button class="pw-toggle" data-target="signup-password-confirm" type="button" tabindex="-1">
-              <i class="bi bi-eye" id="pw-icon-confirm"></i>
-            </button>
+            <input id="signup-password-confirm" class="field-input" type="password" maxlength="8" placeholder="Repeat your password…" autocomplete="new-password" />
+            <button class="pw-toggle" data-target="signup-password-confirm" type="button" tabindex="-1"><i class="bi bi-eye" id="pw-icon-confirm"></i></button>
           </div>
         </div>
-        <button id="btn-signup" class="btn-auth signup">
-          <i class="bi bi-person-check-fill"></i> CREATE ACCOUNT
-        </button>
-        <div id="signup-error" class="auth-error hidden">
-          <i class="bi bi-exclamation-triangle-fill"></i>
-          <span id="signup-error-msg"></span>
-        </div>
-        <div id="signup-success" class="auth-success hidden">
-          <i class="bi bi-check-circle-fill"></i>
-          <span id="signup-success-msg"></span>
-        </div>
+        <button id="btn-signup" class="btn-auth signup"><i class="bi bi-person-check-fill"></i> CREATE ACCOUNT</button>
+        <div id="signup-error" class="auth-error hidden"><i class="bi bi-exclamation-triangle-fill"></i><span id="signup-error-msg"></span></div>
+        <div id="signup-success" class="auth-success hidden"><i class="bi bi-check-circle-fill"></i><span id="signup-success-msg"></span></div>
       </div>
-
-    </div><!-- /signin-card -->
-
-    <!-- Floating game emojis background -->
+    </div>
     <div class="floating-icons" aria-hidden="true">
       <span>🎰</span><span>🍒</span><span>7️⃣</span><span>💎</span><span>⭐</span>
       <span>🎰</span><span>🍒</span><span>7️⃣</span><span>💎</span><span>⭐</span>
     </div>
-  </div><!-- /screen-signin -->
+  </div>
 
-  <!-- ══════════════════════════════════════════
-       MAIN APP WRAPPER
-  ══════════════════════════════════════════ -->
   <div id="app" class="hidden">
-
-    <!-- Global Toast -->
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-    <!-- ── TOP BAR ── -->
     <header class="topbar">
       <div class="topbar-brand">
-        <i class="bi bi-controller topbar-brand-icon"></i>
+        <img src="https://cdn-icons-png.flaticon.com/512/706/706023.png" alt="Arcade Logo" class="topbar-logo-img" />
         <div>
           <span class="topbar-title">ARCADE</span>
           <span class="topbar-year"> 2026</span>
@@ -178,23 +107,19 @@
       </div>
     </header>
 
-    <!-- ── PAGE CONTAINER ── -->
     <main id="page-container">
 
-      <!-- ════════════════════════════
-           HOME
-      ════════════════════════════ -->
+      <!-- ═══ HOME ═══ -->
       <div id="page-home" class="page active">
-
-        <!-- Hero -->
         <section class="home-hero">
           <div class="hero-scan"></div>
-          <div class="hero-icon"><i class="bi bi-controller"></i></div>
+          <div class="hero-icon">
+            <img src="https://cdn-icons-png.flaticon.com/512/706/706023.png" alt="Arcade" class="hero-logo-img" />
+          </div>
           <h2 class="hero-title">WELCOME TO THE<br><span class="hero-accent">ARCADE</span></h2>
           <p class="hero-sub">Neon games. Real fun. Zero cost.</p>
         </section>
 
-        <!-- Daily bonus -->
         <section class="daily-section">
           <div class="daily-card" id="daily-card">
             <div class="daily-left">
@@ -205,14 +130,11 @@
               </div>
             </div>
             <div class="daily-right" id="daily-right">
-              <button id="btn-claim-daily" class="btn-claim">
-                <i class="bi bi-coin"></i> CLAIM
-              </button>
+              <button id="btn-claim-daily" class="btn-claim"><i class="bi bi-coin"></i> CLAIM</button>
             </div>
           </div>
         </section>
 
-        <!-- About -->
         <section class="about-section">
           <h3 class="section-label"><i class="bi bi-info-circle"></i> ABOUT</h3>
           <p class="about-text">
@@ -222,7 +144,6 @@
           </p>
         </section>
 
-        <!-- Games shortcut -->
         <section class="home-games">
           <h3 class="section-label"><i class="bi bi-joystick"></i> GAMES</h3>
           <div class="home-game-grid">
@@ -242,300 +163,201 @@
               </div>
               <i class="bi bi-chevron-right hgc-arrow"></i>
             </div>
-          </div>
-        </section>
-
-        <!-- Quick navigation -->
-        <section class="home-links">
-          <h3 class="section-label"><i class="bi bi-grid-3x3-gap"></i> NAVIGATE</h3>
-          <div class="link-grid">
-            <div class="link-card" data-nav="dashboard">
-              <i class="bi bi-bar-chart-fill lc-icon"></i>
-              <span class="lc-name">Dashboard</span>
-              <span class="lc-desc">Stats &amp; leaderboard</span>
-            </div>
-            <div class="link-card" data-nav="profile">
-              <i class="bi bi-person-circle lc-icon"></i>
-              <span class="lc-name">Profile</span>
-              <span class="lc-desc">Avatar &amp; account</span>
-            </div>
-            <div class="link-card" data-nav="games">
-              <i class="bi bi-joystick lc-icon"></i>
-              <span class="lc-name">Games</span>
-              <span class="lc-desc">Play now</span>
+            <div class="home-game-card" data-nav="games">
+              <div class="hgc-icon">🎮</div>
+              <div class="hgc-info">
+                <span class="hgc-name">CAPTURE A POKÉMON</span>
+                <span class="hgc-desc">Pick a Pokéball, reveal a Pokémon &amp; grow your collection</span>
+              </div>
+              <i class="bi bi-chevron-right hgc-arrow"></i>
             </div>
           </div>
         </section>
-
       </div><!-- /page-home -->
 
-      <!-- ════════════════════════════
-           DASHBOARD
-      ════════════════════════════ -->
+      <!-- ═══ DASHBOARD ═══ -->
       <div id="page-dashboard" class="page">
-        <h2 class="page-title">
-          <i class="bi bi-bar-chart-fill"></i> DASHBOARD
-        </h2>
+        <h2 class="page-title"><i class="bi bi-bar-chart-fill"></i> DASHBOARD</h2>
 
-        <!-- Stats -->
         <section class="dash-stats">
           <h3 class="section-label"><i class="bi bi-graph-up-arrow"></i> YOUR STATS</h3>
           <div class="stat-grid">
-            <div class="stat-card">
-              <i class="bi bi-coin stat-icon"></i>
-              <span class="stat-val" id="stat-total-coins">0</span>
-              <span class="stat-lbl">Total Coins</span>
-            </div>
-            <div class="stat-card">
-              <i class="bi bi-grid-3x3 stat-icon"></i>
-              <span class="stat-val" id="stat-fruit-spins">0</span>
-              <span class="stat-lbl">Fruit Spins</span>
-            </div>
-            <div class="stat-card">
-              <i class="bi bi-dice-3-fill stat-icon"></i>
-              <span class="stat-val" id="stat-lucky-spins">0</span>
-              <span class="stat-lbl">Lucky Pulls</span>
-            </div>
-            <div class="stat-card">
-              <i class="bi bi-trophy-fill stat-icon"></i>
-              <span class="stat-val" id="stat-best-win">0</span>
-              <span class="stat-lbl">Best Win</span>
-            </div>
+            <div class="stat-card"><i class="bi bi-coin stat-icon"></i><span class="stat-val" id="stat-total-coins">0</span><span class="stat-lbl">Total Coins</span></div>
+            <div class="stat-card"><i class="bi bi-grid-3x3 stat-icon"></i><span class="stat-val" id="stat-fruit-spins">0</span><span class="stat-lbl">Fruit Spins</span></div>
+            <div class="stat-card"><i class="bi bi-dice-3-fill stat-icon"></i><span class="stat-val" id="stat-lucky-spins">0</span><span class="stat-lbl">Lucky Pulls</span></div>
+            <div class="stat-card"><i class="bi bi-collection-fill stat-icon" style="color:var(--poke-red)"></i><span class="stat-val" id="stat-captures">0</span><span class="stat-lbl">Pokémon Caught</span></div>
+            <div class="stat-card"><i class="bi bi-trophy-fill stat-icon"></i><span class="stat-val" id="stat-best-win">0</span><span class="stat-lbl">Best Win</span></div>
           </div>
         </section>
 
-        <!-- Leaderboard -->
+        <!-- Pokémon Candidates — recent captures across all players -->
+        <section class="dash-pokemon-candidates">
+          <h3 class="section-label"><i class="bi bi-award-fill" style="color:var(--poke-red)"></i> LATEST CAPTURED POKÉMON</h3>
+          <p class="candidates-subtitle">Recent catches from all trainers</p>
+          <div id="pokemon-candidates-list" class="candidates-list">
+            <div class="candidates-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div>
+          </div>
+        </section>
+
         <section class="dash-leaderboard">
           <h3 class="section-label"><i class="bi bi-trophy"></i> LEADERBOARD</h3>
-          <div id="leaderboard-list" class="lb-list">
-            <div class="lb-loading">
-              <i class="bi bi-arrow-repeat"></i> Loading…
-            </div>
-          </div>
+          <div id="leaderboard-list" class="lb-list"><div class="lb-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div></div>
         </section>
 
-        <!-- Activity -->
         <section class="dash-activity">
           <h3 class="section-label"><i class="bi bi-clock-history"></i> RECENT ACTIVITY</h3>
           <div class="activity-tabs">
-            <button class="act-tab act-tab-active" data-game="fruit">
-              🎰 Fruit Spin
-            </button>
-            <button class="act-tab" data-game="lucky">
-              7️⃣ Lucky 777
-            </button>
+            <button class="act-tab act-tab-active" data-game="fruit">🎰 Fruit Spin</button>
+            <button class="act-tab" data-game="lucky">7️⃣ Lucky 777</button>
           </div>
-          <div id="activity-list" class="activity-list">
-            <div class="act-empty">
-              <i class="bi bi-joystick"></i> No activity yet — go play!
-            </div>
-          </div>
+          <div id="activity-list" class="activity-list"><div class="act-empty"><i class="bi bi-joystick"></i> No activity yet — go play!</div></div>
         </section>
-
       </div><!-- /page-dashboard -->
 
-      <!-- ════════════════════════════
-           PROFILE
-      ════════════════════════════ -->
+      <!-- ═══ PROFILE ═══ -->
       <div id="page-profile" class="page">
         <h2 class="page-title"><i class="bi bi-person-circle"></i> PROFILE</h2>
 
         <section class="profile-section">
           <h3 class="section-label"><i class="bi bi-emoji-smile"></i> AVATAR</h3>
           <div class="avatar-display">
-            <div class="avatar-big" id="avatar-preview">👾</div>
-            <p class="avatar-hint">Pick your arcade persona</p>
+            <div class="avatar-big" id="avatar-preview">
+              <img id="avatar-preview-img" src="" alt="Avatar" class="avatar-preview-img hidden" />
+              <span id="avatar-preview-fallback">?</span>
+            </div>
+            <p class="avatar-hint">Choose your Pokémon persona</p>
           </div>
-          <div class="avatar-grid" id="avatar-grid"></div>
+          <div class="pokemon-avatar-section">
+            <div id="pokemon-avatar-grid" class="pokemon-avatar-grid">
+              <div class="pokemon-loading"><i class="bi bi-arrow-repeat"></i> Loading Pokémon…</div>
+            </div>
+            <div class="pokemon-pagination">
+              <button id="btn-pokemon-prev" class="btn-pokemon-nav" disabled>
+                <i class="bi bi-chevron-left"></i> Prev
+              </button>
+              <span id="pokemon-page-label" class="pokemon-page-label">Page 1</span>
+              <button id="btn-pokemon-next" class="btn-pokemon-nav">
+                Next <i class="bi bi-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Pokémon Collection Gallery -->
+        <section class="profile-section">
+          <h3 class="section-label">
+            <i class="bi bi-collection-fill" style="color:var(--poke-red)"></i> POKÉMON COLLECTION
+            <span class="collection-count-badge" id="collection-count">0</span>
+          </h3>
+          <div id="collection-gallery" class="collection-gallery">
+            <div class="collection-empty">
+              <i class="bi bi-collection"></i>
+              <p>No Pokémon captured yet.</p>
+              <p class="collection-empty-sub">Head to Games and try Capture a Pokémon!</p>
+            </div>
+          </div>
         </section>
 
         <section class="profile-section">
           <h3 class="section-label"><i class="bi bi-person-vcard"></i> ACCOUNT</h3>
           <div class="account-info">
-            <div class="account-row">
-              <span class="acc-label"><i class="bi bi-at"></i> Username</span>
-              <span class="acc-val" id="acc-username">—</span>
-            </div>
-            <div class="account-row">
-              <span class="acc-label"><i class="bi bi-calendar3"></i> Member since</span>
-              <span class="acc-val" id="acc-since">—</span>
-            </div>
-            <div class="account-row">
-              <span class="acc-label"><i class="bi bi-coin"></i> Coins</span>
-              <span class="acc-val" id="acc-coins">—</span>
-            </div>
-            <div class="account-row">
-              <span class="acc-label"><i class="bi bi-grid-3x3"></i> Fruit Spins</span>
-              <span class="acc-val" id="acc-fruit-spins">—</span>
-            </div>
-            <div class="account-row">
-              <span class="acc-label"><i class="bi bi-dice-3-fill"></i> Lucky Pulls</span>
-              <span class="acc-val" id="acc-lucky-spins">—</span>
-            </div>
-            <div class="account-row">
-              <span class="acc-label"><i class="bi bi-trophy-fill"></i> Best Win</span>
-              <span class="acc-val" id="acc-best-win">—</span>
-            </div>
+            <div class="account-row"><span class="acc-label"><i class="bi bi-at"></i> Username</span><span class="acc-val" id="acc-username">—</span></div>
+            <div class="account-row"><span class="acc-label"><i class="bi bi-calendar3"></i> Member since</span><span class="acc-val" id="acc-since">—</span></div>
+            <div class="account-row"><span class="acc-label"><i class="bi bi-coin"></i> Coins</span><span class="acc-val" id="acc-coins">—</span></div>
+            <div class="account-row"><span class="acc-label"><i class="bi bi-grid-3x3"></i> Fruit Spins</span><span class="acc-val" id="acc-fruit-spins">—</span></div>
+            <div class="account-row"><span class="acc-label"><i class="bi bi-dice-3-fill"></i> Lucky Pulls</span><span class="acc-val" id="acc-lucky-spins">—</span></div>
+            <div class="account-row"><span class="acc-label"><i class="bi bi-collection-fill"></i> Pokémon Caught</span><span class="acc-val" id="acc-captures">—</span></div>
+            <div class="account-row"><span class="acc-label"><i class="bi bi-trophy-fill"></i> Best Win</span><span class="acc-val" id="acc-best-win">—</span></div>
           </div>
-          <button id="btn-signout" class="btn-danger mt-2">
-            <i class="bi bi-box-arrow-right"></i> SIGN OUT
-          </button>
+          <button id="btn-signout" class="btn-danger mt-2"><i class="bi bi-box-arrow-right"></i> SIGN OUT</button>
         </section>
-
       </div><!-- /page-profile -->
 
-      <!-- ════════════════════════════
-           GAMES
-      ════════════════════════════ -->
+      <!-- ═══ GAMES ═══ -->
       <div id="page-games" class="page">
         <h2 class="page-title"><i class="bi bi-joystick"></i> GAMES</h2>
         <div class="games-grid">
 
-          <!-- Fruit Spin -->
           <div class="game-select-card" id="open-fruit">
-            <div class="gsc-badge">
-              <i class="bi bi-play-fill"></i> PLAY
-            </div>
+            <div class="gsc-badge"><i class="bi bi-play-fill"></i> PLAY</div>
             <div class="gsc-icon">🎰</div>
             <h3 class="gsc-name">FRUIT SPIN</h3>
-            <p class="gsc-desc">
-              Spin the border grid. Land on a fruit to collect coins.
-              Watch out for the bomb — it cancels your reward.
-            </p>
-            <div class="gsc-cost">
-              <i class="bi bi-coin"></i> 5 coins per spin
-            </div>
-            <button class="btn-play">
-              <i class="bi bi-play-circle-fill"></i> PLAY NOW
-            </button>
+            <p class="gsc-desc">Spin the border grid. Land on a fruit to collect coins. Watch out for the bomb — it cancels your reward.</p>
+            <div class="gsc-cost"><i class="bi bi-coin"></i> 5 coins per spin</div>
+            <button class="btn-play"><i class="bi bi-play-circle-fill"></i> PLAY NOW</button>
           </div>
 
-          <!-- Lucky 777 -->
           <div class="game-select-card" id="open-lucky">
-            <div class="gsc-badge lucky">
-              <i class="bi bi-play-fill"></i> PLAY
-            </div>
+            <div class="gsc-badge lucky"><i class="bi bi-play-fill"></i> PLAY</div>
             <div class="gsc-icon">7️⃣</div>
             <h3 class="gsc-name">LUCKY 777</h3>
-            <p class="gsc-desc">
-              Classic 3-reel slot machine. Match symbols across all three reels
-              to win — hit triple 7s for the jackpot!
-            </p>
-            <div class="gsc-cost">
-              <i class="bi bi-coin"></i> 10 coins per pull
-            </div>
-            <button class="btn-play lucky">
-              <i class="bi bi-play-circle-fill"></i> PLAY NOW
-            </button>
+            <p class="gsc-desc">Classic 3-reel slot machine. Match symbols across all three reels to win — hit triple 7s for the jackpot!</p>
+            <div class="gsc-cost"><i class="bi bi-coin"></i> 10 coins per pull</div>
+            <button class="btn-play lucky"><i class="bi bi-play-circle-fill"></i> PLAY NOW</button>
+          </div>
+
+          <div class="game-select-card capture-card" id="open-capture">
+            <div class="gsc-badge capture"><i class="bi bi-play-fill"></i> PLAY</div>
+            <div class="gsc-icon">🎮</div>
+            <h3 class="gsc-name" style="color:var(--poke-red)">CAPTURE A POKÉMON</h3>
+            <p class="gsc-desc">Pick one of 5 Pokéballs to reveal and capture a random Gen 1 Pokémon. One free throw daily — buy more for 500 coins.</p>
+            <div class="gsc-cost capture-cost"><i class="bi bi-gift-fill"></i> 1 free daily · 500 coins extra</div>
+            <button class="btn-play capture"><i class="bi bi-collection-fill"></i> PLAY NOW</button>
           </div>
 
         </div>
       </div><!-- /page-games -->
 
-    </main><!-- /page-container -->
+    </main>
 
-    <!-- ── BOTTOM NAV ── -->
     <nav class="bottom-nav" aria-label="Main navigation">
-      <button class="nav-btn active" data-page="home" aria-label="Home">
-        <i class="bi bi-house-fill nav-icon"></i>
-        <span class="nav-label">HOME</span>
-      </button>
-      <button class="nav-btn" data-page="dashboard" aria-label="Dashboard">
-        <i class="bi bi-bar-chart-fill nav-icon"></i>
-        <span class="nav-label">STATS</span>
-      </button>
-      <button class="nav-btn" data-page="games" aria-label="Games">
-        <i class="bi bi-joystick nav-icon"></i>
-        <span class="nav-label">GAMES</span>
-      </button>
-      <button class="nav-btn" data-page="profile" aria-label="Profile">
-        <i class="bi bi-person-fill nav-icon"></i>
-        <span class="nav-label">PROFILE</span>
-      </button>
+      <button class="nav-btn active" data-page="home"      aria-label="Home">     <i class="bi bi-house-fill nav-icon"></i>     <span class="nav-label">HOME</span></button>
+      <button class="nav-btn"        data-page="dashboard" aria-label="Dashboard"><i class="bi bi-bar-chart-fill nav-icon"></i>  <span class="nav-label">STATS</span></button>
+      <button class="nav-btn"        data-page="games"     aria-label="Games">    <i class="bi bi-joystick nav-icon"></i>        <span class="nav-label">GAMES</span></button>
+      <button class="nav-btn"        data-page="profile"   aria-label="Profile">  <i class="bi bi-person-fill nav-icon"></i>     <span class="nav-label">PROFILE</span></button>
     </nav>
+  </div><!-- /app -->
 
-  </div><!-- /#app -->
-
-  <!-- ══════════════════════════════════════════
-       GAME OVERLAY: FRUIT SPIN
-  ══════════════════════════════════════════ -->
+  <!-- ══════════════════════════════════════════════
+       FRUIT SPIN OVERLAY
+  ═══════════════════════════════════════════════ -->
   <div id="overlay-fruit" class="game-overlay hidden" role="dialog" aria-label="Fruit Spin game">
     <div class="overlay-topbar">
-      <button class="overlay-back" id="back-fruit">
-        <i class="bi bi-chevron-left"></i> Back
-      </button>
+      <button class="overlay-back" id="back-fruit"><i class="bi bi-chevron-left"></i> Back</button>
       <span class="overlay-title">🎰 FRUIT SPIN</span>
-      <div class="overlay-coins" title="Current coins">
-        <i class="bi bi-coin"></i>
-        <span id="fruit-coins-display" class="coin-val">0</span>
-      </div>
+      <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="fruit-coins-display" class="coin-val">0</span></div>
     </div>
     <div class="fruit-game-body">
-      <!-- Result banner (hidden until spin) -->
       <div id="fruit-result" class="fruit-result hidden" role="status" aria-live="polite"></div>
-
-      <!-- 5×5 grid -->
-      <div class="grid-wrap">
-        <div id="fruit-grid" class="fruit-grid"></div>
-      </div>
-
-      <!-- Legend -->
+      <div class="grid-wrap"><div id="fruit-grid" class="fruit-grid"></div></div>
       <div class="fruit-legend" aria-label="Symbol values">
-        <span>🍒 = 1</span>
-        <span>🥭 = 3</span>
-        <span>🍎 = 5</span>
-        <span>🍍 = 10</span>
-        <span>🍫 = 100</span>
-        <span>💣 = miss</span>
+        <span>🍒 = 1</span><span>🥭 = 3</span><span>🍎 = 5</span><span>🍍 = 10</span><span>🍫 = 100</span><span>💣 = miss</span>
       </div>
-
-      <p class="spin-cost-note">
-        <i class="bi bi-coin"></i> Each spin costs <strong>5 coins</strong>
-      </p>
-
-      <button id="btn-fruit-spin" class="btn-spin-fruit">
-        <i class="bi bi-arrow-clockwise"></i> SPIN
-      </button>
-
-      <!-- Spin history -->
+      <p class="spin-cost-note"><i class="bi bi-coin"></i> Each spin costs <strong>5 coins</strong></p>
+      <button id="btn-fruit-spin" class="btn-spin-fruit"><i class="bi bi-arrow-clockwise"></i> SPIN</button>
       <div class="fruit-history-wrap">
-        <h4 class="hist-title">
-          <i class="bi bi-clock-history"></i> Recent Spins
-        </h4>
+        <h4 class="hist-title"><i class="bi bi-clock-history"></i> Recent Spins</h4>
         <div id="fruit-history" class="fruit-history" role="list"></div>
       </div>
     </div>
-  </div><!-- /overlay-fruit -->
+  </div>
 
-  <!-- ══════════════════════════════════════════
-       GAME OVERLAY: LUCKY 777
-  ══════════════════════════════════════════ -->
+  <!-- ══════════════════════════════════════════════
+       LUCKY 777 OVERLAY
+  ═══════════════════════════════════════════════ -->
   <div id="overlay-lucky" class="game-overlay hidden" role="dialog" aria-label="Lucky 777 slot game">
     <div class="overlay-topbar">
-      <button class="overlay-back" id="back-lucky">
-        <i class="bi bi-chevron-left"></i> Back
-      </button>
+      <button class="overlay-back" id="back-lucky"><i class="bi bi-chevron-left"></i> Back</button>
       <span class="overlay-title">7️⃣ LUCKY 777</span>
-      <div class="overlay-coins" title="Current coins">
-        <i class="bi bi-coin"></i>
-        <span id="lucky-coins-display" class="coin-val">0</span>
-      </div>
+      <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="lucky-coins-display" class="coin-val">0</span></div>
     </div>
     <div class="lucky-game-body">
-
-      <!-- Slot machine -->
       <div class="slot-machine">
         <div class="slot-screen">
           <div class="slot-reels">
-            <div class="slot-reel-wrap">
-              <div class="slot-reel" id="reel-0"><div class="reel-strip" id="strip-0"></div></div>
-            </div>
-            <div class="slot-reel-wrap">
-              <div class="slot-reel" id="reel-1"><div class="reel-strip" id="strip-1"></div></div>
-            </div>
-            <div class="slot-reel-wrap">
-              <div class="slot-reel" id="reel-2"><div class="reel-strip" id="strip-2"></div></div>
-            </div>
+            <div class="slot-reel-wrap"><div class="slot-reel" id="reel-0"><div class="reel-strip" id="strip-0"></div></div></div>
+            <div class="slot-reel-wrap"><div class="slot-reel" id="reel-1"><div class="reel-strip" id="strip-1"></div></div></div>
+            <div class="slot-reel-wrap"><div class="slot-reel" id="reel-2"><div class="reel-strip" id="strip-2"></div></div></div>
           </div>
           <div class="slot-payline" aria-hidden="true"></div>
         </div>
@@ -544,90 +366,94 @@
           <span></span><span></span><span></span><span></span><span></span>
         </div>
       </div>
-
-      <!-- Result banner -->
       <div id="lucky-result" class="lucky-result hidden" role="status" aria-live="polite"></div>
-
-      <!-- Pay table -->
       <div class="lucky-paytable" role="table" aria-label="Payout table">
-        <div class="pt-header" role="row">
-          <span role="columnheader">Combo</span>
-          <span role="columnheader">Name</span>
-          <span role="columnheader">Payout</span>
-        </div>
-        <div class="pt-row jackpot" role="row">
-          <span role="cell">7️⃣7️⃣7️⃣</span>
-          <span role="cell">JACKPOT</span>
-          <span class="pt-val" role="cell">
-            <i class="bi bi-coin"></i> 500
-          </span>
-        </div>
-        <div class="pt-row" role="row">
-          <span role="cell">💎💎💎</span>
-          <span role="cell">Diamond</span>
-          <span class="pt-val" role="cell">
-            <i class="bi bi-coin"></i> 200
-          </span>
-        </div>
-        <div class="pt-row" role="row">
-          <span role="cell">⭐⭐⭐</span>
-          <span role="cell">Stars</span>
-          <span class="pt-val" role="cell">
-            <i class="bi bi-coin"></i> 100
-          </span>
-        </div>
-        <div class="pt-row" role="row">
-          <span role="cell">🍒🍒🍒</span>
-          <span role="cell">Cherries</span>
-          <span class="pt-val" role="cell">
-            <i class="bi bi-coin"></i> 50
-          </span>
-        </div>
-        <div class="pt-row" role="row">
-          <span role="cell">🍋🍋🍋</span>
-          <span role="cell">Lemons</span>
-          <span class="pt-val" role="cell">
-            <i class="bi bi-coin"></i> 30
-          </span>
-        </div>
-        <div class="pt-row" role="row">
-          <span role="cell">🔔🔔🔔</span>
-          <span role="cell">Bells</span>
-          <span class="pt-val" role="cell">
-            <i class="bi bi-coin"></i> 20
-          </span>
-        </div>
-        <div class="pt-row mixed" role="row">
-          <span role="cell">Any 2 match</span>
-          <span role="cell">Partial match</span>
-          <span class="pt-val" role="cell">
-            <i class="bi bi-coin"></i> 5
-          </span>
-        </div>
+        <div class="pt-header" role="row"><span role="columnheader">Combo</span><span role="columnheader">Name</span><span role="columnheader">Payout</span></div>
+        <div class="pt-row jackpot" role="row"><span role="cell">7️⃣7️⃣7️⃣</span><span role="cell">JACKPOT</span><span class="pt-val" role="cell"><i class="bi bi-coin"></i> 500</span></div>
+        <div class="pt-row" role="row"><span role="cell">💎💎💎</span><span role="cell">Diamond</span><span class="pt-val" role="cell"><i class="bi bi-coin"></i> 200</span></div>
+        <div class="pt-row" role="row"><span role="cell">⭐⭐⭐</span><span role="cell">Stars</span><span class="pt-val" role="cell"><i class="bi bi-coin"></i> 100</span></div>
+        <div class="pt-row" role="row"><span role="cell">🍒🍒🍒</span><span role="cell">Cherries</span><span class="pt-val" role="cell"><i class="bi bi-coin"></i> 50</span></div>
+        <div class="pt-row" role="row"><span role="cell">🍋🍋🍋</span><span role="cell">Lemons</span><span class="pt-val" role="cell"><i class="bi bi-coin"></i> 30</span></div>
+        <div class="pt-row" role="row"><span role="cell">🔔🔔🔔</span><span role="cell">Bells</span><span class="pt-val" role="cell"><i class="bi bi-coin"></i> 20</span></div>
+        <div class="pt-row mixed" role="row"><span role="cell">Any 2 match</span><span role="cell">Partial match</span><span class="pt-val" role="cell"><i class="bi bi-coin"></i> 5</span></div>
+      </div>
+      <p class="spin-cost-note"><i class="bi bi-coin"></i> Each pull costs <strong>10 coins</strong></p>
+      <button id="btn-lucky-pull" class="btn-spin-lucky"><i class="bi bi-stars"></i> PULL</button>
+      <div class="fruit-history-wrap">
+        <h4 class="hist-title"><i class="bi bi-clock-history"></i> Recent Pulls</h4>
+        <div id="lucky-history" class="fruit-history" role="list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       CAPTURE A POKÉMON OVERLAY
+  ═══════════════════════════════════════════════ -->
+  <div id="overlay-capture" class="game-overlay hidden" role="dialog" aria-label="Capture a Pokémon game">
+    <div class="overlay-topbar capture-topbar">
+      <button class="overlay-back" id="back-capture"><i class="bi bi-chevron-left"></i> Back</button>
+      <span class="overlay-title capture-title">
+        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png" alt="" class="topbar-ball-icon" aria-hidden="true" />
+        CAPTURE A POKÉMON
+      </span>
+      <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="capture-coins-display" class="coin-val">0</span></div>
+    </div>
+
+    <div class="capture-game-body">
+
+      <!-- Status banner -->
+      <div id="capture-status" class="capture-status" role="status" aria-live="polite"></div>
+
+      <!-- 5 Pokéballs -->
+      <div id="pokeballs-wrap" class="pokeballs-wrap">
+        <p class="pokeballs-hint">Which Pokéball will you choose?</p>
+        <div id="pokeballs-grid" class="pokeballs-grid" role="group" aria-label="Choose a Pokéball"></div>
       </div>
 
-      <p class="spin-cost-note">
-        <i class="bi bi-coin"></i> Each pull costs <strong>10 coins</strong>
-      </p>
+      <!-- Reveal panel (hidden until ball picked) -->
+      <div id="capture-reveal" class="capture-reveal hidden" role="status" aria-live="polite"></div>
 
-      <button id="btn-lucky-pull" class="btn-spin-lucky">
-        <i class="bi bi-stars"></i> PULL
-      </button>
+      <!-- Buy another pokeball CTA (shown when daily used) -->
+      <div id="capture-buy-wrap" class="capture-buy-wrap hidden">
+        <div class="capture-buy-card">
+          <img
+            src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png"
+            alt="Pokéball"
+            class="buy-ball-img"
+          />
+          <p class="buy-title">Want to catch more?</p>
+          <p class="buy-sub">Purchase a Pokéball to throw again and expand your collection.</p>
+          <button id="btn-buy-pokeball" class="btn-buy-pokeball">
+            <i class="bi bi-bag-fill"></i> BUY POKÉBALL — 500 coins
+          </button>
+        </div>
 
-      <!-- Pull history -->
-      <div class="fruit-history-wrap">
-        <h4 class="hist-title">
-          <i class="bi bi-clock-history"></i> Recent Pulls
-        </h4>
-        <div id="lucky-history" class="fruit-history" role="list"></div>
+        <!-- Show last captured if any -->
+        <div id="capture-reveal" class="capture-reveal hidden" role="status" aria-live="polite"></div>
+      </div>
+
+      <!-- "Catch again" button — visible after reveal when ball was purchased -->
+      <div id="capture-again-wrap" class="hidden" style="text-align:center; margin-top: 16px;">
+        <button id="btn-capture-again" class="btn-capture-again">
+          <i class="bi bi-arrow-counterclockwise"></i> THROW AGAIN
+        </button>
+      </div>
+
+      <!-- How to play -->
+      <div class="capture-howto">
+        <h4 class="hist-title"><i class="bi bi-question-circle"></i> HOW TO PLAY</h4>
+        <ul class="capture-rules">
+          <li><i class="bi bi-gift-fill" style="color:var(--poke-red)"></i> One <strong>free Pokéball</strong> every 24 hours</li>
+          <li><i class="bi bi-cursor-fill" style="color:var(--cyan)"></i> Pick any of the <strong>5 Pokéballs</strong> to reveal a random Gen 1 Pokémon</li>
+          <li><i class="bi bi-collection-fill" style="color:var(--gold)"></i> All captured Pokémon are saved to your <strong>Profile Collection</strong></li>
+          <li><i class="bi bi-bag-fill" style="color:var(--magenta)"></i> Want more? Buy an extra Pokéball for <strong>500 coins</strong></li>
+        </ul>
       </div>
 
     </div>
-  </div><!-- /overlay-lucky -->
+  </div><!-- /overlay-capture -->
 
-  <!-- Bootstrap 5 JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- App logic -->
   <script type="module" src="app.js"></script>
 </body>
 </html>
