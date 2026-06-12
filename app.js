@@ -1,2059 +1,1335 @@
 /**
- * Fruit Game 2026 — Main Application
- * Auth: Google Sign-In (popup)
- * Architecture: Module pattern with clear separation of concerns
- * Principles: DRY, Encapsulation, Utility functions
+ * ARCADE 2026 — app.js
+ * Firebase: Username/Password Auth + Firestore
+ * Games: Fruit Spin, Lucky 777
  */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  addDoc,
-  collection,
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs,
-  deleteDoc,
-  writeBatch,
-  Timestamp,
+  getFirestore, doc, getDoc, setDoc, updateDoc, addDoc,
+  collection, query, where, orderBy, limit, getDocs,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ═══════════════════════════════════════════════════
-// CONFIG
+//  FIREBASE CONFIG
 // ═══════════════════════════════════════════════════
-
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCp_FRyk-SRUr_tHqwRa6jZBclW9U-hJwQ",
-  authDomain: "fruit-game-2026.firebaseapp.com",
-  projectId: "fruit-game-2026",
-  storageBucket: "fruit-game-2026.firebasestorage.app",
-  messagingSenderId: "1007167234923",
-  appId: "1:1007167234923:web:b99d77476bc132a544a22e"
+  apiKey:            "AIzaSyDeZudTZ4BOZT6TEaqWCJbbZa1SA_PzDnM",
+  authDomain:        "webretro-games-2026.firebaseapp.com",
+  projectId:         "webretro-games-2026",
+  storageBucket:     "webretro-games-2026.firebasestorage.app",
+  messagingSenderId: "719993018557",
+  appId:             "1:719993018557:web:90577dfab542bed7c1bfd4",
 };
 
-const GAME_CONFIG = {
-  SPIN_COST:        5,
-  STARTING_CREDITS: 100,
-  GRID_SIZE:        5,
-  SPIN_DURATION_MS: 4200,
-  TICK_MS:          60,
-};
 // ═══════════════════════════════════════════════════
-// POP MATCH PRESETS
+//  CONSTANTS
 // ═══════════════════════════════════════════════════
 
-const PM_PRESETS = {
-  colors: [
-    {
-      id:      "default",
-      name:    "Arcade Classic",
-      price:   0,
-      free:    true,
-      preview: { cardBorder: "#ff4d6d", matched: "#00b38a", glow: "rgba(255,77,109,0.5)" },
-      desc:    "The original arcade look. Always free.",
-    },
-    {
-      id:      "neon",
-      name:    "Neon Pulse",
-      price:   100,
-      free:    false,
-      preview: { cardBorder: "#00f5d4", matched: "#7b2fff", glow: "rgba(0,245,212,0.5)" },
-      desc:    "Cyan borders, violet matched cards. Electric.",
-    },
-    {
-      id:      "gold",
-      name:    "Golden Hour",
-      price:   150,
-      free:    false,
-      preview: { cardBorder: "#f7c948", matched: "#ff8c00", glow: "rgba(247,201,72,0.5)" },
-      desc:    "All-gold everything. For the top of the leaderboard.",
-    },
-    {
-      id:      "ghost",
-      name:    "Ghost Mode",
-      price:   120,
-      free:    false,
-      preview: { cardBorder: "#a855f7", matched: "#ec4899", glow: "rgba(168,85,247,0.5)" },
-      desc:    "Purple & pink. Hauntingly good.",
-    },
-    {
-      id:      "ice",
-      name:    "Ice Cold",
-      price:   130,
-      free:    false,
-      preview: { cardBorder: "#38bdf8", matched: "#0ea5e9", glow: "rgba(56,189,248,0.5)" },
-      desc:    "Cool blue tones. Keep it frosty.",
-    },
-
-    // NEW COLORS
-    {
-      id:      "lava",
-      name:    "Lava Rush",
-      price:   170,
-      free:    false,
-      preview: { cardBorder: "#ff3b30", matched: "#ff9500", glow: "rgba(255,59,48,0.5)" },
-      desc:    "Molten red energy with blazing orange highlights.",
-    },
-    {
-      id:      "forest",
-      name:    "Forest Core",
-      price:   140,
-      free:    false,
-      preview: { cardBorder: "#22c55e", matched: "#15803d", glow: "rgba(34,197,94,0.5)" },
-      desc:    "Deep greens inspired by nature and adventure.",
-    },
-    {
-      id:      "sunset",
-      name:    "Sunset Drift",
-      price:   160,
-      free:    false,
-      preview: { cardBorder: "#fb7185", matched: "#f97316", glow: "rgba(251,113,133,0.5)" },
-      desc:    "Warm pink and orange skies at golden hour.",
-    },
-    {
-      id:      "cyber",
-      name:    "Cyber Matrix",
-      price:   200,
-      free:    false,
-      preview: { cardBorder: "#00ff99", matched: "#00ccff", glow: "rgba(0,255,153,0.5)" },
-      desc:    "Digital green with futuristic blue neon vibes.",
-    },
-    {
-      id:      "royal",
-      name:    "Royal Velvet",
-      price:   180,
-      free:    false,
-      preview: { cardBorder: "#7c3aed", matched: "#f43f5e", glow: "rgba(124,58,237,0.5)" },
-      desc:    "Elegant royal purple with luxurious pink accents.",
-    },
-  ],
-
-  emojis: [
-    {
-      id:      "classic",
-      name:    "Classic Arcade",
-      price:   0,
-      free:    true,
-      symbols: ["👾","🕹️","💎","⚡","👑","🎲","🚀","🔥","🧩","🌀"],
-      desc:    "The original symbol set. Always free.",
-    },
-    {
-      id:      "fruits",
-      name:    "Fruit Frenzy",
-      price:   100,
-      free:    false,
-      symbols: ["🍒","🥭","🍎","🍍","🍫","🍓","🍑","🍇","🍉","🥝"],
-      desc:    "Familiar fruits from the slot machine, now on cards.",
-    },
-    {
-      id:      "animals",
-      name:    "Wild Pack",
-      price:   120,
-      free:    false,
-      symbols: ["🐶","🐱","🦊","🐸","🐧","🦁","🐯","🦋","🐙","🦄"],
-      desc:    "Cute but competitive. Don't let the animals fool you.",
-    },
-    {
-      id:      "space",
-      name:    "Deep Space",
-      price:   150,
-      free:    false,
-      symbols: ["🪐","🌙","⭐","☄️","🛸","🌟","💫","🔭","🎆","🚀"],
-      desc:    "Explore the cosmos one card flip at a time.",
-    },
-    {
-      id:      "food",
-      name:    "Junk Food",
-      price:   100,
-      free:    false,
-      symbols: ["🍕","🍔","🌮","🍜","🍣","🧁","🍩","🍦","🥐","🍿"],
-      desc:    "Chaotic and delicious. Hunger not included.",
-    },
-
-    // NEW EMOJIS
-    {
-      id:      "mythic",
-      name:    "Mythic Legends",
-      price:   180,
-      free:    false,
-      symbols: ["🐉","🦄","🧙","⚔️","🛡️","🔥","👑","🏰","🧝","🐲"],
-      desc:    "Fantasy creatures and legendary heroes collide.",
-    },
-    {
-      id:      "ocean",
-      name:    "Ocean Dive",
-      price:   130,
-      free:    false,
-      symbols: ["🐠","🐬","🦈","🐳","🐙","🪸","🌊","🦀","🐚","🪼"],
-      desc:    "A relaxing underwater adventure.",
-    },
-    {
-      id:      "sports",
-      name:    "Champion Arena",
-      price:   140,
-      free:    false,
-      symbols: ["⚽","🏀","🏈","🎾","🏐","🥊","🏆","🎯","🏓","⛳"],
-      desc:    "Competitive energy for true champions.",
-    },
-    {
-      id:      "weather",
-      name:    "Weather Chaos",
-      price:   110,
-      free:    false,
-      symbols: ["☀️","🌧️","⛈️","❄️","🌪️","🌈","☁️","🌤️","🌙","⚡"],
-      desc:    "Every forecast leads to a different combo.",
-    },
-    {
-      id:      "tech",
-      name:    "Tech World",
-      price:   170,
-      free:    false,
-      symbols: ["💻","📱","⌨️","🖥️","🧠","🤖","🔋","📡","🎧","🛰️"],
-      desc:    "Modern gadgets and futuristic tech icons.",
-    },
-  ],
-};
-
-const POP_MATCH_CONFIG = {
-  STAGE_REWARDS:     [0, 2, 4, 7, 12, 20], // index = stage number
-  RUN_MULTIPLIERS:   [1.0, 0.6, 0.3, 0.1], // 1st, 2nd, 3rd, 4th+ run of the day
-};
-
-
-// ═══════════════════════════════════════════════════
-// FRUITS CONFIG (Weights for spinning probability)
-// ═══════════════════════════════════════════════════
-
-const FRUITS = [
-  { emoji: "🍒", value: 1,   weight: 45, label: "cherry" },
-  { emoji: "🍍", value: 10,  weight: 12, label: "pineapple" },
-  { emoji: "🥭", value: 3,   weight: 18, label: "mango" },
-  { emoji: "🍎", value: 5,   weight: 15, label: "apple" },
-  { emoji: "🍫", value: 100, weight: 3,  label: "bar" },
-  { emoji: "💣", value: 0,   weight: 7,  label: "bomb" },
+const AVATARS = [
+  "👾","🤖","👻","🐉","🦊","🐺","🎭","💀","👽","🐸",
+  "🦁","🐯","🐧","🦄","🐙","🎃","🔥","⚡","🌙","💎",
+  "🍒","🎮","🃏","🎲","🚀",
 ];
 
-const TOTAL_WEIGHT = FRUITS.reduce((sum, f) => sum + f.weight, 0);
+const FRUIT_ITEMS = [
+  { emoji:"🍒", label:"Cherry",      value:1,   weight:45 },
+  { emoji:"🥭", label:"Mango",       value:3,   weight:18 },
+  { emoji:"🍎", label:"Apple",       value:5,   weight:15 },
+  { emoji:"🍍", label:"Pineapple",   value:10,  weight:12 },
+  { emoji:"🍫", label:"Jackpot Bar", value:100, weight:3  },
+  { emoji:"💣", label:"Bomb",        value:0,   weight:7  },
+];
+const FRUIT_TOTAL_WEIGHT = FRUIT_ITEMS.reduce((s, f) => s + f.weight, 0);
 
-// ═══════════════════════════════════════════════════
-// FIXED BORDER LAYOUT
-// ═══════════════════════════════════════════════════
-
-const FIXED_LAYOUT = {
+const FRUIT_FIXED_BORDER = {
   0:"🍒", 1:"🍍", 2:"💣", 3:"🍎", 4:"🍒",
   5:"🍍",                          9:"🍎",
   10:"🍒",                         14:"🍒",
   15:"💣",                         19:"💣",
-  20:"🍒", 21:"🥭", 22:"🍫", 23:"🥭", 24:"🍒"
+  20:"🍒", 21:"🥭", 22:"🍫", 23:"🥭", 24:"🍒",
+};
+
+const FRUIT_SPIN_COST = 5;
+const FRUIT_SPIN_MS   = 4000;
+const FRUIT_TICK_MS   = 65;
+
+const LUCKY_SYMBOLS   = ["7️⃣","💎","⭐","🍒","🍋","🔔","🍇","🍀"];
+const LUCKY_PULL_COST = 10;
+
+const LUCKY_PAYOUTS = {
+  "7️⃣-7️⃣-7️⃣": 500,
+  "💎-💎-💎":    200,
+  "⭐-⭐-⭐":    100,
+  "🍒-🍒-🍒":    50,
+  "🍋-🍋-🍋":    30,
+  "🔔-🔔-🔔":    20,
+};
+const LUCKY_PARTIAL_WIN = 5;
+
+const DAILY_REWARD = 100;
+const MS_PER_DAY   = 86_400_000;
+
+// Username → internal Firebase Auth email
+const toEmail = (username) => `${username.toLowerCase()}@arcade2026.local`;
+
+// Password: exactly 8 alphanumeric chars
+const PW_REGEX = /^[a-zA-Z0-9]{8}$/;
+
+// ═══════════════════════════════════════════════════
+//  FIREBASE INIT
+// ═══════════════════════════════════════════════════
+
+const firebaseApp = initializeApp(FIREBASE_CONFIG);
+const auth        = getAuth(firebaseApp);
+const db          = getFirestore(firebaseApp);
+
+// ═══════════════════════════════════════════════════
+//  UTILITY HELPERS
+// ═══════════════════════════════════════════════════
+
+const $       = (id)           => document.getElementById(id);
+const qs      = (sel, ctx = document) => ctx.querySelector(sel);
+const sleep   = (ms)           => new Promise(r => setTimeout(r, ms));
+
+const cls = {
+  add:    (el, ...c) => el?.classList.add(...c),
+  remove: (el, ...c) => el?.classList.remove(...c),
+  toggle: (el, c, v) => el?.classList.toggle(c, v),
+  has:    (el, c)    => !!el?.classList.contains(c),
+};
+
+const fmt = {
+  coins: (n) => Math.floor(n ?? 0).toLocaleString(),
+  time:  (d) => d instanceof Date
+    ? d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })
+    : "—",
+  date:  (d) => d instanceof Date
+    ? d.toLocaleDateString([], { month:"short", day:"numeric", year:"numeric" })
+    : "—",
+};
+
+// Resolve Firestore Timestamp or plain Date/number → JS Date
+const toDate = (v) => {
+  if (!v) return null;
+  if (v?.toDate) return v.toDate();
+  if (v instanceof Date) return v;
+  return new Date(v);
+};
+
+const weightedPick = (items, totalWeight) => {
+  let r = Math.random() * totalWeight;
+  for (const item of items) { r -= item.weight; if (r <= 0) return item; }
+  return items[items.length - 1];
 };
 
 // ═══════════════════════════════════════════════════
-// TOAST MODULE
+//  TOAST
 // ═══════════════════════════════════════════════════
 
 const Toast = (() => {
-  let _timer = null;
+  let _t = null;
+  const ICONS = {
+    win:     '<i class="bi bi-check-circle-fill"></i>',
+    loss:    '<i class="bi bi-x-circle-fill"></i>',
+    jackpot: '<i class="bi bi-stars"></i>',
+    info:    '<i class="bi bi-info-circle-fill"></i>',
+  };
 
-  const show = (text, type = "", duration = 2500) => {
-    const el = $("pm-toast");
+  const show = (msg, type = "info", ms = 2600) => {
+    const el = $("toast");
     if (!el) return;
-
-    // Cancel any existing hide timer and reset animation
-    clearTimeout(_timer);
-    el.className = "pm-toast";           // strip all type + hiding classes
-    el.textContent = text;
-    if (type) cls.add(el, type);
+    clearTimeout(_t);
+    el.className = `toast ${type}`;
+    el.innerHTML = `${ICONS[type] || ""} ${msg}`;
     cls.remove(el, "hidden");
-
-    // Force reflow so animation restarts if called back-to-back
-    void el.offsetWidth;
-
-    _timer = setTimeout(() => {
+    void el.offsetWidth; // force reflow for animation restart
+    _t = setTimeout(() => {
       cls.add(el, "hiding");
       el.addEventListener("animationend", () => {
         cls.add(el, "hidden");
         cls.remove(el, "hiding");
       }, { once: true });
-    }, duration);
+    }, ms);
   };
 
   return { show };
 })();
 
 // ═══════════════════════════════════════════════════
-// FIREBASE INIT
+//  APP STATE
 // ═══════════════════════════════════════════════════
 
-const firebaseApp = initializeApp(FIREBASE_CONFIG);
-const auth        = getAuth(firebaseApp);
-const db          = getFirestore(firebaseApp);
-const provider    = new GoogleAuthProvider();
-
-// ═══════════════════════════════════════════════════
-// UTILITY HELPERS
-// ═══════════════════════════════════════════════════
-
-const $ = (id) => document.getElementById(id);
-
-const cls = {
-  add:    (el, ...c) => el?.classList.add(...c),
-  remove: (el, ...c) => el?.classList.remove(...c),
-  toggle: (el, c, v) => el?.classList.toggle(c, v),
-  has:    (el, c)    => el?.classList.contains(c) ?? false,
-};
-
-const showEl = (el) => cls.remove(el, "hidden");
-const hideEl = (el) => cls.add(el, "hidden");
-const sleep  = (ms) => new Promise((r) => setTimeout(r, ms));
-
-const formatCurrency = (val)  => `₱${Number(val).toFixed(2)}`;
-const formatTime     = (date) =>
-  date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-const animateBump = (el, cssClass, duration = 500) => {
-  cls.add(el, cssClass);
-  setTimeout(() => cls.remove(el, cssClass), duration);
-};
-
-const getWeightedFruit = () => {
-  let random = Math.random() * TOTAL_WEIGHT;
-  for (const fruit of FRUITS) {
-    random -= fruit.weight;
-    if (random <= 0) return fruit;
-  }
-  return FRUITS[FRUITS.length - 1];
+const State = {
+  user:          null,
+  userData:      null,
+  fruitSpinning: false,
+  luckySpinning: false,
 };
 
 // ═══════════════════════════════════════════════════
-// GRID UTILITIES (pure — no DOM)
+//  FIRESTORE SERVICE
 // ═══════════════════════════════════════════════════
 
-const GridUtils = (() => {
-  const SIZE  = GAME_CONFIG.GRID_SIZE;
+const userRef     = (uid)      => doc(db, "users", uid);
+const spinsCol    = ()         => collection(db, "spins");
+const usernameRef = (username) => doc(db, "usernames", username.toLowerCase());
+
+const DB = {
+  async isUsernameTaken(username) {
+    const snap = await getDoc(usernameRef(username));
+    return snap.exists();
+  },
+
+  async getUser(uid) {
+    const snap = await getDoc(userRef(uid));
+    return snap.exists() ? snap.data() : null;
+  },
+
+  async createUser(uid, username) {
+    const data = {
+      username,
+      avatar:          "👾",
+      coins:           100,   // welcome bonus
+      totalFruitSpins: 0,
+      totalLuckySpins: 0,
+      bestWin:         0,
+      lastClaimAt:     null,
+      createdAt:       serverTimestamp(),
+    };
+    await setDoc(userRef(uid), data);
+    await setDoc(usernameRef(username), { uid });
+    return data;
+  },
+
+  async updateUser(uid, fields) {
+    await updateDoc(userRef(uid), fields);
+    if (State.userData) Object.assign(State.userData, fields);
+  },
+
+  async logSpin(uid, game, symbols, coinsWon, coinsCost) {
+    await addDoc(spinsCol(), {
+      uid, game,
+      symbols:  Array.isArray(symbols) ? symbols.join(",") : symbols,
+      coinsWon, coinsCost,
+      net:      coinsWon - coinsCost,
+      createdAt: serverTimestamp(),
+    });
+  },
+
+  async getSpins(uid, game, count = 20) {
+    const q = query(
+      spinsCol(),
+      where("uid",  "==", uid),
+      where("game", "==", game),
+      orderBy("createdAt", "desc"),
+      limit(count)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  async getLeaderboard(n = 20) {
+    const q = query(
+      collection(db, "users"),
+      orderBy("coins", "desc"),
+      limit(n)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  },
+};
+
+// ═══════════════════════════════════════════════════
+//  COINS MODULE
+// ═══════════════════════════════════════════════════
+
+const Coins = {
+  get() { return State.userData?.coins ?? 0; },
+
+  _refresh() {
+    const v = fmt.coins(this.get());
+    // Update every coin display in the DOM
+    [$("topbar-coins"), $("fruit-coins-display"), $("lucky-coins-display")].forEach(el => {
+      if (el) el.textContent = v;
+    });
+    // Profile / stats displays
+    if ($("acc-coins"))        $("acc-coins").textContent        = v + " coins";
+    if ($("stat-total-coins")) $("stat-total-coins").textContent = v;
+  },
+
+  bump() {
+    const el = $("topbar-coins");
+    if (!el) return;
+    cls.add(el, "bump");
+    setTimeout(() => cls.remove(el, "bump"), 500);
+  },
+
+  async add(amount, persist = true) {
+    State.userData.coins = (State.userData.coins ?? 0) + amount;
+    this._refresh();
+    this.bump();
+    if (persist && State.user) {
+      await DB.updateUser(State.user.uid, { coins: State.userData.coins });
+    }
+  },
+
+  async deduct(amount) {
+    if (this.get() < amount) return false;
+    State.userData.coins -= amount;
+    this._refresh();
+    if (State.user) await DB.updateUser(State.user.uid, { coins: State.userData.coins });
+    return true;
+  },
+
+  set(val) {
+    if (State.userData) State.userData.coins = val;
+    this._refresh();
+  },
+};
+
+// ═══════════════════════════════════════════════════
+//  DAILY REWARD
+// ═══════════════════════════════════════════════════
+
+const Daily = (() => {
+  let _interval = null;
+
+  const getLastClaim = () => toDate(State.userData?.lastClaimAt);
+
+  const canClaim = () => {
+    const last = getLastClaim();
+    return !last || Date.now() - last.getTime() >= MS_PER_DAY;
+  };
+
+  const msUntilNext = () => {
+    const last = getLastClaim();
+    if (!last) return 0;
+    return Math.max(0, MS_PER_DAY - (Date.now() - last.getTime()));
+  };
+
+  const fmtCountdown = (ms) => {
+    const s   = Math.floor(ms / 1000);
+    const h   = Math.floor(s / 3600);
+    const m   = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return [h, m, sec].map(v => String(v).padStart(2, "0")).join(":");
+  };
+
+  const stop = () => { clearInterval(_interval); _interval = null; };
+
+  const render = () => {
+    const right = $("daily-right");
+    if (!right) return;
+
+    if (canClaim()) {
+      right.innerHTML = `
+        <button id="btn-claim-daily" class="btn-claim">
+          <i class="bi bi-coin"></i> CLAIM
+        </button>`;
+      $("btn-claim-daily")?.addEventListener("click", claim);
+    } else {
+      stop();
+      const tick = () => {
+        const dr = $("daily-right");
+        if (dr) {
+          dr.innerHTML = `
+            <div class="daily-countdown">
+              <i class="bi bi-hourglass-split"></i> ${fmtCountdown(msUntilNext())}
+            </div>`;
+        }
+        if (msUntilNext() <= 1000) { stop(); render(); }
+      };
+      tick();
+      _interval = setInterval(tick, 1000);
+    }
+  };
+
+  const claim = async () => {
+    if (!canClaim()) return;
+    const dr = $("daily-right");
+    if (dr) dr.innerHTML = `<div class="daily-countdown">Claiming…</div>`;
+
+    const now = new Date();
+    State.userData.lastClaimAt = now;
+    await DB.updateUser(State.user.uid, { lastClaimAt: now });
+    await Coins.add(DAILY_REWARD, false);
+    await DB.updateUser(State.user.uid, { coins: State.userData.coins });
+    Toast.show(`+${DAILY_REWARD} daily coins claimed!`, "win", 3000);
+    render();
+  };
+
+  const init = () => render();
+
+  return { init, stop, render };
+})();
+
+// ═══════════════════════════════════════════════════
+//  ROUTER / NAV
+// ═══════════════════════════════════════════════════
+
+const Router = {
+  _current: "home",
+
+  go(page) {
+    document.querySelectorAll(".page").forEach(p => cls.remove(p, "active"));
+    document.querySelectorAll(".nav-btn").forEach(b => {
+      cls.toggle(b, "active", b.dataset.page === page);
+    });
+    const el = $(`page-${page}`);
+    if (el) cls.add(el, "active");
+    this._current = page;
+
+    if (page === "dashboard") DashPage.refresh();
+    if (page === "profile")   ProfilePage.refresh();
+  },
+
+  init() {
+    document.querySelectorAll(".nav-btn").forEach(btn => {
+      btn.addEventListener("click", () => this.go(btn.dataset.page));
+    });
+    document.querySelectorAll("[data-nav]").forEach(el => {
+      el.addEventListener("click", () => this.go(el.dataset.nav));
+    });
+  },
+};
+
+// ═══════════════════════════════════════════════════
+//  SPLASH / SCREEN MANAGER
+// ═══════════════════════════════════════════════════
+
+const Screens = {
+  _screens: ["screen-splash", "screen-signin"],
+
+  show(id) {
+    this._screens.forEach(s => {
+      const el = $(s);
+      if (!el) return;
+      cls.toggle(el, "active", s === id);
+    });
+    cls.toggle($("app"), "hidden", id !== "app");
+  },
+
+  splashOut(cb) {
+    const el = $("screen-splash");
+    if (!el) { cb(); return; }
+    cls.add(el, "fade-out");
+    el.addEventListener("animationend", () => {
+      cls.remove(el, "active", "fade-out");
+      cb();
+    }, { once: true });
+  },
+};
+
+// ═══════════════════════════════════════════════════
+//  AUTH SCREEN
+// ═══════════════════════════════════════════════════
+
+const AuthScreen = {
+  init() {
+    // Tab switching
+    document.querySelectorAll(".auth-tab").forEach(tab => {
+      tab.addEventListener("click", () => this.switchTab(tab.dataset.tab));
+    });
+
+    // Password visibility toggles
+    document.querySelectorAll(".pw-toggle").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const input = $(btn.dataset.target);
+        if (!input) return;
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        // Swap the icon inside the button
+        const icon = btn.querySelector("i");
+        if (icon) {
+          icon.className = show ? "bi bi-eye-slash" : "bi bi-eye";
+        }
+      });
+    });
+
+    // Login
+    $("btn-login")?.addEventListener("click", () => this.login());
+    $("login-password")?.addEventListener("keydown", e => {
+      if (e.key === "Enter") this.login();
+    });
+
+    // Sign Up
+    $("btn-signup")?.addEventListener("click", () => this.signup());
+    $("signup-password-confirm")?.addEventListener("keydown", e => {
+      if (e.key === "Enter") this.signup();
+    });
+  },
+
+  switchTab(tab) {
+    document.querySelectorAll(".auth-tab").forEach(t => {
+      cls.toggle(t, "active", t.dataset.tab === tab);
+    });
+    cls.toggle($("form-login"),  "hidden", tab !== "login");
+    cls.toggle($("form-signup"), "hidden", tab !== "signup");
+    this._clearErrors();
+  },
+
+  _clearErrors() {
+    [
+      { wrap: "login-error",    msg: "login-error-msg"   },
+      { wrap: "signup-error",   msg: "signup-error-msg"  },
+      { wrap: "signup-success", msg: "signup-success-msg"},
+    ].forEach(({ wrap, msg }) => {
+      const w = $(wrap), m = $(msg);
+      if (w) cls.add(w, "hidden");
+      if (m) m.textContent = "";
+    });
+  },
+
+  _setError(wrapperId, msgId, text) {
+    const w = $(wrapperId), m = $(msgId);
+    if (m) m.textContent = text;
+    if (w) cls.remove(w, "hidden");
+  },
+
+  _setSuccess(wrapperId, msgId, text) {
+    const w = $(wrapperId), m = $(msgId);
+    if (m) m.textContent = text;
+    if (w) cls.remove(w, "hidden");
+  },
+
+  _setBusy(btnId, busy, idleLabel) {
+    const btn = $(btnId);
+    if (!btn) return;
+    btn.disabled = busy;
+    // Keep the icon, just change the text node
+    const icon = btn.querySelector("i")?.outerHTML ?? "";
+    btn.innerHTML = busy
+      ? `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${busy === "login" ? "LOGGING IN…" : "CREATING…"}`
+      : `${icon} ${idleLabel}`;
+  },
+
+  async login() {
+    this._clearErrors();
+    const username = $("login-username")?.value.trim();
+    const password = $("login-password")?.value;
+
+    if (!username) {
+      this._setError("login-error", "login-error-msg", "Please enter your username.");
+      return;
+    }
+    if (!password) {
+      this._setError("login-error", "login-error-msg", "Please enter your password.");
+      return;
+    }
+
+    const btn = $("btn-login");
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> LOGGING IN…`; }
+    try {
+      await signInWithEmailAndPassword(auth, toEmail(username), password);
+      // onAuthStateChanged handles the rest
+    } catch (e) {
+      this._setError("login-error", "login-error-msg", this._friendlyError(e.code));
+      if (btn) { btn.disabled = false; btn.innerHTML = `<i class="bi bi-lightning-charge-fill"></i> LOGIN`; }
+    }
+  },
+
+  async signup() {
+    this._clearErrors();
+    const username = $("signup-username")?.value.trim();
+    const password = $("signup-password")?.value;
+    const confirm  = $("signup-password-confirm")?.value;
+
+    if (!username) {
+      this._setError("signup-error", "signup-error-msg", "Username is required."); return;
+    }
+    if (username.length > 25) {
+      this._setError("signup-error", "signup-error-msg", "Username must be 25 characters or fewer."); return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      this._setError("signup-error", "signup-error-msg", "Username may only contain letters, numbers, and underscores."); return;
+    }
+    if (!PW_REGEX.test(password)) {
+      this._setError("signup-error", "signup-error-msg", "Password must be exactly 8 alphanumeric characters (e.g. myPass25)."); return;
+    }
+    if (password !== confirm) {
+      this._setError("signup-error", "signup-error-msg", "Passwords do not match."); return;
+    }
+
+    const btn = $("btn-signup");
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> CREATING…`; }
+    try {
+      const taken = await DB.isUsernameTaken(username);
+      if (taken) {
+        this._setError("signup-error", "signup-error-msg", `"${username}" is already taken. Choose a different username.`);
+        if (btn) { btn.disabled = false; btn.innerHTML = `<i class="bi bi-person-check-fill"></i> CREATE ACCOUNT`; }
+        return;
+      }
+
+      const cred = await createUserWithEmailAndPassword(auth, toEmail(username), password);
+      await DB.createUser(cred.user.uid, username);
+      this._setSuccess("signup-success", "signup-success-msg", "Account created! Welcome to Arcade 2026 🎰");
+      // onAuthStateChanged will sign them in automatically
+    } catch (e) {
+      this._setError("signup-error", "signup-error-msg", this._friendlyError(e.code));
+      if (btn) { btn.disabled = false; btn.innerHTML = `<i class="bi bi-person-check-fill"></i> CREATE ACCOUNT`; }
+    }
+  },
+
+  _friendlyError(code) {
+    switch (code) {
+      case "auth/invalid-credential":
+      case "auth/wrong-password":
+      case "auth/user-not-found":
+        return "Incorrect username or password.";
+      case "auth/email-already-in-use":
+        return "That username is already registered.";
+      case "auth/too-many-requests":
+        return "Too many attempts. Please wait a moment and try again.";
+      case "auth/network-request-failed":
+        return "Network error — check your connection and try again.";
+      default:
+        return "Something went wrong. Please try again.";
+    }
+  },
+};
+
+// ═══════════════════════════════════════════════════
+//  PROFILE PAGE
+// ═══════════════════════════════════════════════════
+
+const ProfilePage = {
+  init() {
+    // Build avatar grid
+    const grid = $("avatar-grid");
+    if (grid) {
+      grid.innerHTML = "";
+      AVATARS.forEach(a => {
+        const btn = document.createElement("button");
+        btn.className    = "avatar-opt";
+        btn.textContent  = a;
+        btn.setAttribute("aria-label", `Select avatar ${a}`);
+        btn.addEventListener("click", () => this.selectAvatar(a));
+        grid.appendChild(btn);
+      });
+    }
+
+    $("btn-signout")?.addEventListener("click", () => {
+      Daily.stop();
+      signOut(auth);
+    });
+  },
+
+  refresh() {
+    if (!State.userData) return;
+    const d = State.userData;
+
+    // Basic info
+    if ($("acc-username"))    $("acc-username").textContent    = d.username || "—";
+    if ($("acc-coins"))       $("acc-coins").textContent       = fmt.coins(d.coins) + " coins";
+    if ($("acc-fruit-spins")) $("acc-fruit-spins").textContent = fmt.coins(d.totalFruitSpins || 0);
+    if ($("acc-lucky-spins")) $("acc-lucky-spins").textContent = fmt.coins(d.totalLuckySpins || 0);
+    if ($("acc-best-win"))    $("acc-best-win").textContent    = fmt.coins(d.bestWin || 0) + " coins";
+
+    // Member since (Firestore Timestamp or Date)
+    if ($("acc-since")) {
+      const ts = toDate(d.createdAt);
+      $("acc-since").textContent = ts ? fmt.date(ts) : "—";
+    }
+
+    this.setAvatar(d.avatar || "👾", false);
+  },
+
+  setAvatar(a, persist = true) {
+    const preview = $("avatar-preview");
+    if (preview) preview.textContent = a;
+
+    document.querySelectorAll(".avatar-opt").forEach(btn => {
+      cls.toggle(btn, "active", btn.textContent === a);
+    });
+
+    if (persist && State.user) {
+      if (State.userData) State.userData.avatar = a;
+      DB.updateUser(State.user.uid, { avatar: a }).catch(() => {});
+      Toast.show("Avatar saved!", "win");
+    }
+  },
+
+  selectAvatar(a) { this.setAvatar(a, true); },
+};
+
+// ═══════════════════════════════════════════════════
+//  DASHBOARD PAGE
+// ═══════════════════════════════════════════════════
+
+const DashPage = {
+  _activeGame: "fruit",
+
+  async refresh() {
+    if (!State.user || !State.userData) return;
+    const d = State.userData;
+
+    // Stats
+    if ($("stat-total-coins"))  $("stat-total-coins").textContent  = fmt.coins(d.coins);
+    if ($("stat-fruit-spins"))  $("stat-fruit-spins").textContent  = fmt.coins(d.totalFruitSpins || 0);
+    if ($("stat-lucky-spins"))  $("stat-lucky-spins").textContent  = fmt.coins(d.totalLuckySpins || 0);
+    if ($("stat-best-win"))     $("stat-best-win").textContent     = fmt.coins(d.bestWin || 0);
+
+    await Promise.all([
+      this.loadLeaderboard(),
+      this.loadActivity(this._activeGame),
+    ]);
+  },
+
+  async loadLeaderboard() {
+    const list = $("leaderboard-list");
+    if (!list) return;
+    list.innerHTML = `<div class="lb-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div>`;
+    try {
+      const entries = await DB.getLeaderboard(20);
+      list.innerHTML = "";
+      if (!entries.length) {
+        list.innerHTML = `<div class="lb-empty"><i class="bi bi-people"></i> No players yet.</div>`;
+        return;
+      }
+      const medals = ["🥇","🥈","🥉"];
+      entries.forEach((e, i) => {
+        const isMe = e.uid === State.user.uid;
+        const name = (e.username?.trim() || "Player");
+        const row  = document.createElement("div");
+        row.className = "lb-row" + (isMe ? " me" : "");
+        row.innerHTML = `
+          <span class="lb-rank">${medals[i] ?? "#"+(i+1)}</span>
+          <span class="lb-avatar">${e.avatar || "👾"}</span>
+          <span class="lb-name">${name}${isMe ? `<span class="lb-you">YOU</span>` : ""}</span>
+          <span class="lb-coins">
+            <i class="bi bi-coin" style="color:var(--gold)"></i>
+            ${fmt.coins(e.coins || 0)}
+          </span>`;
+        list.appendChild(row);
+      });
+    } catch (err) {
+      console.error("Leaderboard error:", err);
+      list.innerHTML = `<div class="lb-empty"><i class="bi bi-wifi-off"></i> Could not load leaderboard.</div>`;
+    }
+  },
+
+  async loadActivity(game) {
+    this._activeGame = game;
+    document.querySelectorAll(".act-tab").forEach(t => {
+      cls.toggle(t, "act-tab-active", t.dataset.game === game);
+    });
+
+    const list = $("activity-list");
+    if (!list) return;
+    list.innerHTML = `<div class="act-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div>`;
+
+    try {
+      const items = await DB.getSpins(State.user.uid, game, 20);
+      list.innerHTML = "";
+
+      if (!items.length) {
+        list.innerHTML = `<div class="act-empty"><i class="bi bi-joystick"></i> No activity yet — go play!</div>`;
+        return;
+      }
+
+      items.forEach(item => {
+        const won    = item.coinsWon  ?? 0;
+        const cost   = item.coinsCost ?? (game === "fruit" ? FRUIT_SPIN_COST : LUCKY_PULL_COST);
+        const net    = won - cost;
+        const date   = toDate(item.createdAt);
+        const isWin  = net >= 0;
+        const el     = document.createElement("div");
+        el.className = "act-item";
+
+        let emoji, resultText;
+
+        if (game === "fruit") {
+          emoji      = item.symbols || "🎰";
+          resultText = won > 0 ? `Won ${fmt.coins(won)} coins` : "Bomb — no reward";
+        } else {
+          const syms = (item.symbols || "").split(",");
+          emoji      = syms.slice(0, 3).join("") || "7️⃣";
+          resultText = won > 0 ? `Won ${fmt.coins(won)} coins` : "No match";
+        }
+
+        el.innerHTML = `
+          <span class="act-emoji">${emoji}</span>
+          <div class="act-body">
+            <div class="act-result ${isWin ? "win" : "loss"}">${resultText}</div>
+            <div class="act-time">
+              <i class="bi bi-clock"></i>
+              ${date ? fmt.time(date) + " · " + fmt.date(date) : "Just now"}
+            </div>
+          </div>
+          <span class="act-coins ${isWin ? "win" : "loss"}">
+            ${isWin ? "+" : ""}${fmt.coins(net)}
+          </span>`;
+        list.appendChild(el);
+      });
+    } catch (err) {
+      console.error("Activity error:", err);
+      list.innerHTML = `<div class="act-empty"><i class="bi bi-wifi-off"></i> Could not load activity.</div>`;
+    }
+  },
+
+  bindTabs() {
+    document.querySelectorAll(".act-tab").forEach(t => {
+      t.addEventListener("click", () => this.loadActivity(t.dataset.game));
+    });
+  },
+};
+
+// ═══════════════════════════════════════════════════
+//  FRUIT GRID
+// ═══════════════════════════════════════════════════
+
+const FruitGrid = (() => {
+  const SIZE  = 5;
   const TOTAL = SIZE * SIZE;
+  let _cells  = [];
 
   const borderIndices = () => {
     const out = [];
     for (let r = 0; r < SIZE; r++)
       for (let c = 0; c < SIZE; c++)
-        if (r === 0 || r === SIZE - 1 || c === 0 || c === SIZE - 1)
+        if (r === 0 || r === SIZE-1 || c === 0 || c === SIZE-1)
           out.push(r * SIZE + c);
     return out;
   };
 
-  const isBorder = (idx) => {
-    const r = Math.floor(idx / SIZE);
-    const c = idx % SIZE;
-    return r === 0 || r === SIZE - 1 || c === 0 || c === SIZE - 1;
-  };
+  const BORDER = borderIndices();
 
-  return { borderIndices, isBorder, SIZE, TOTAL };
-})();
-
-// ═══════════════════════════════════════════════════
-// FIRESTORE SERVICE
-// ═══════════════════════════════════════════════════
-
-const DB = {
-  userRef:    (uid) => doc(db, "users", uid),
-  historyCol: ()    => collection(db, "gameHistory"),
-
-  async getUser(uid) {
-    const snap = await getDoc(DB.userRef(uid));
-    return snap.exists() ? snap.data() : null;
-  },
-
-  async createUser(uid, email) {
-    const data = {
-      email,
-      credits:     GAME_CONFIG.STARTING_CREDITS,
-      lastLogin:   serverTimestamp(),
-      lastClaimAt: null,
-      nickname:    "",
-    };
-    await setDoc(DB.userRef(uid), data);
-    return data;
-  },
-
-  async ensureUser(uid, email) {
-    const existing = await DB.getUser(uid);
-    if (existing) {
-      await updateDoc(DB.userRef(uid), { lastLogin: serverTimestamp() });
-      return existing;
-    }
-    return DB.createUser(uid, email);
-  },
-
-  async updateCredits(uid, credits) {
-    await updateDoc(DB.userRef(uid), { credits });
-  },
-
-  async logHistory(uid, result, reward) {
-    await addDoc(DB.historyCol(), {
-      userId: uid, result, reward, createdAt: serverTimestamp(),
-    });
-  },
-
-  async getRecentHistory(uid, count = 8) {
-    const q = query(
-      DB.historyCol(),
-      where("userId", "==", uid),
-      orderBy("createdAt", "desc"),
-      limit(count)
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  },
-
-  async updateNickname(uid, nickname) {
-    await updateDoc(DB.userRef(uid), { nickname });
-  },
-
-  /**
-   * Fetch top N users ordered by credits descending.
-   * Returns array of { uid, email, nickname, credits }
-   */
-  async getLeaderboard(topN = 20) {
-    const q = query(
-      collection(db, "users"),
-      orderBy("credits", "desc"),
-      limit(topN)
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
-  },
-
-  /**
-   * Delete all gameHistory entries for this user that are older than today midnight.
-   * Uses batched deletes (Firestore max 500 per batch).
-   * Fire-and-forget — called silently in the background.
-   */
-  async purgeOldHistory(uid) {
-    const cutoff = new Date();
-    cutoff.setHours(0, 0, 0, 0); // today midnight = anything before this is stale
-
-    const q = query(
-      DB.historyCol(),
-      where("userId",    "==", uid),
-      where("createdAt", "<",  Timestamp.fromDate(cutoff))
-    );
-
-    const snap = await getDocs(q);
-    if (snap.empty) return; // nothing to purge
-
-    // Firestore batches are capped at 500 ops — chunk if needed
-    const BATCH_LIMIT = 499;
-    const docs = snap.docs;
-
-    for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
-      const batch = writeBatch(db);
-      docs.slice(i, i + BATCH_LIMIT).forEach(d => batch.delete(d.ref));
-      await batch.commit();
-    }
-
-    console.log(`[Purge] Deleted ${docs.length} stale history record(s).`);
-  },
-
-  /**
-   * Fetch all history entries for a user within a specific day.
-   * @param {string} uid
-   * @param {Date} dayStart  — midnight of the target day (local time)
-   * @param {Date} dayEnd    — midnight of the next day (local time)
-   */
-  async getDayHistory(uid, dayStart, dayEnd) {
-    const q = query(
-      DB.historyCol(),
-      where("userId", "==", uid),
-      where("createdAt", ">=", Timestamp.fromDate(dayStart)),
-      where("createdAt", "<",  Timestamp.fromDate(dayEnd)),
-      orderBy("createdAt", "desc")
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  },
-  /**
-   * Get how many full Pop Match clears the user has done today.
-   * Resets automatically when the stored date is a previous day.
-   */
-  async getPopMatchDailyRuns(uid) {
-    const data = await DB.getUser(uid);
-    if (!data) return 0;
-
-    const capDate = data.popMatchRunDate;
-    if (!capDate) return 0;
-
-    const stored = capDate.toDate ? capDate.toDate() : new Date(capDate);
-    if (stored.toDateString() !== new Date().toDateString()) return 0;
-
-    return data.popMatchDailyRuns || 0;
-  },
-
-  /**
-   * Increment the daily run counter and stamp today's date.
-   */
-  async incrementPopMatchDailyRuns(uid) {
-    const current = await DB.getPopMatchDailyRuns(uid);
-    await updateDoc(DB.userRef(uid), {
-      popMatchDailyRuns: current + 1,
-      popMatchRunDate:   new Date(),
-    });
-  },
-  async getInventory(uid) {
-    const data = await DB.getUser(uid);
-    return data?.popMatchInventory ?? {
-      ownedPresets: ["default", "classic"],
-      activeColor:  "default",
-      activeEmoji:  "classic",
-    };
-  },
-
-  async saveInventory(uid, inventory) {
-    await updateDoc(DB.userRef(uid), { popMatchInventory: inventory });
-  },
-};
-
-// ═══════════════════════════════════════════════════
-// APPLICATION STATE
-// ═══════════════════════════════════════════════════
-
-const State = {
-  user:       null,
-  userData:   null,
-  isSpinning: false,  // ← single source of truth for spin lock
-};
-
-// ═══════════════════════════════════════════════════
-// SCREEN ROUTER
-// ═══════════════════════════════════════════════════
-
-const Router = {
-  SCREENS: ["screen-splash", "screen-auth", "screen-dashboard", "screen-game", "screen-match"],
-  goto(id) {
-    const splash = $("screen-splash");
-
-    const doSwitch = () => {
-      this.SCREENS.forEach((s) => cls.toggle($(s), "active", s === id));
-    };
-
-    // If we're leaving the splash, fade it out then switch
-    if (splash && cls.has(splash, "active") && id !== "screen-splash") {
-      cls.add(splash, "fade-out");
-      splash.addEventListener("animationend", () => {
-        cls.remove(splash, "active", "fade-out");
-        doSwitch();
-      }, { once: true });
-    } else {
-      doSwitch();
-    }
-  },
-};
-
-// ═══════════════════════════════════════════════════
-// GRID MODULE
-// ═══════════════════════════════════════════════════
-
-const GridModule = (() => {
-  const borderIdx   = GridUtils.borderIndices();
-  const fruitLayout = {};
-
-  borderIdx.forEach(idx => {
-    const emoji = FIXED_LAYOUT[idx];
-    fruitLayout[idx] = FRUITS.find(f => f.emoji === emoji);
+  // Pre-compute fruit for each border cell
+  const FRUIT_AT = {};
+  BORDER.forEach(idx => {
+    const emoji = FRUIT_FIXED_BORDER[idx];
+    FRUIT_AT[idx] = FRUIT_ITEMS.find(f => f.emoji === emoji) ?? FRUIT_ITEMS[0];
   });
-
-  let cells = [];
 
   const render = () => {
     const grid = $("fruit-grid");
+    if (!grid) return;
     grid.innerHTML = "";
-    cells = [];
-
-    for (let i = 0; i < GridUtils.TOTAL; i++) {
-      const el       = document.createElement("div");
-      const isBorder = GridUtils.isBorder(i);
-      el.className   = isBorder ? "cell fruit" : "cell inner";
-
-      if (isBorder) {
-        const fruit    = fruitLayout[i];
-        el.textContent = fruit.emoji;
-        el.dataset.index = i;
-        if (fruit.emoji === "💣") el.classList.add("bomb");
-        if (fruit.emoji === "🍫") el.classList.add("jackpot");
-      } else {
-        el.textContent = "X";
-      }
-
-      grid.appendChild(el);
-      cells.push(el);
+    _cells = [];
+    for (let i = 0; i < TOTAL; i++) {
+      const cell     = document.createElement("div");
+      const isBorder = BORDER.includes(i);
+      cell.className = isBorder ? "fg-cell border-cell" : "fg-cell inner-cell";
+      cell.textContent = isBorder ? FRUIT_AT[i].emoji : "×";
+      grid.appendChild(cell);
+      _cells.push(cell);
     }
   };
 
-  const clearHighlights = () =>
-    borderIdx.forEach(i => cls.remove(cells[i], "lit", "winner"));
+  const clearLit = () => {
+    BORDER.forEach(i => cls.remove(_cells[i], "lit", "winner", "winner-bomb"));
+  };
 
-  const setLit    = (idx) => { clearHighlights(); cls.add(cells[idx], "lit");    };
-  const setWinner = (idx) => { clearHighlights(); cls.add(cells[idx], "winner"); };
-  const getFruitAt       = (idx) => fruitLayout[idx];
-  const getBorderIndices = ()    => borderIdx;
+  const setLit    = (idx) => { clearLit(); cls.add(_cells[idx], "lit"); };
+  const setWinner = (idx, isBomb) => {
+    clearLit();
+    cls.add(_cells[idx], isBomb ? "winner-bomb" : "winner");
+  };
 
-  return { render, clearHighlights, setLit, setWinner, getFruitAt, getBorderIndices };
+  return { render, BORDER, FRUIT_AT, setLit, setWinner, clearLit };
 })();
 
 // ═══════════════════════════════════════════════════
-// HISTORY MODULE
+//  FRUIT SPIN GAME
 // ═══════════════════════════════════════════════════
 
-const HistoryModule = (() => {
-  // ── Date helpers ─────────────────────────────────
+const FruitGame = {
+  init() {
+    FruitGrid.render();
+    $("btn-fruit-spin")?.addEventListener("click", () => this.spin());
+    $("back-fruit")?.addEventListener("click",    () => {
+      cls.add($("overlay-fruit"), "hidden");
+    });
+    $("open-fruit")?.addEventListener("click",    () => this.open());
+  },
 
-  /** Returns midnight (00:00:00) of a given date in local time */
-  const todayStart = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
-  const todayEnd   = () => { const d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+1); return d; };
+  open() {
+    cls.remove($("overlay-fruit"), "hidden");
+    FruitGrid.render();
+    FruitGrid.clearLit();
+    cls.add($("fruit-result"), "hidden");
+    this._refreshCoins();
+    this._loadHistory();
+  },
 
-  // ── In-memory session accumulator (Today only) ────
-  // Tracks spins added during the current session before Firestore confirms them
-  let _sessionSpins = 0;
-  let _sessionWon   = 0;
+  _refreshCoins() {
+    const el = $("fruit-coins-display");
+    if (el) el.textContent = fmt.coins(Coins.get());
+  },
 
-  // ── DOM helpers ───────────────────────────────────
-
-  const setStatEl = (id, value) => {
-    const el = $(id);
-    if (el) el.textContent = value;
-  };
-
-  const renderStats = ({ todaySpins, todayWon, totalCount }) => {
-    setStatEl("stat-today-spins", todaySpins);
-    setStatEl("stat-today-won",   todayWon > 0 ? formatCurrency(todayWon) : "₱0.00");
-    setStatEl("history-count",    totalCount);
-    // Show/hide empty state
-    const list  = $("history-list");
-    const empty = $("history-empty");
-    if (list && empty) {
-      if (list.children.length === 0) {
-        cls.remove(empty, "hidden");
-      } else {
-        cls.add(empty, "hidden");
-      }
-    }
-  };
-
-  // ── Build a single history item card ─────────────
-
-  const buildItem = ({ result, reward, createdAt }, isNew = false) => {
-    const el     = document.createElement("div");
-    el.className = "history-item" + (isNew ? " is-new" : "");
-    const time   = createdAt?.toDate ? formatTime(createdAt.toDate()) : formatTime(new Date());
-    const isBomb = result === "💣";
-    el.innerHTML = `
-      <span class="hi-fruit">${result}</span>
-      <span class="hi-middle">
-        <span class="hi-reward ${isBomb ? "hi-bomb" : ""}">
-          ${isBomb ? "💥 Nothing" : "+" + formatCurrency(reward)}
-        </span>
-        <span class="hi-label">${isBomb ? "Bomb hit!" : "Collected"}</span>
-      </span>
-      <span class="hi-time">${time}</span>`;
-    return el;
-  };
-
-  // ── Public: prepend a new spin result (live update) ──
-
-  const prepend = (entry) => {
-    const list = $("history-list");
-    if (!list) return;
-
-    // Add to list (cap at 50 visible items)
-    list.prepend(buildItem(entry, true));
-    while (list.children.length > 50) list.lastChild.remove();
-
-    // Remove is-new highlight after animation
-    setTimeout(() => list.firstChild?.classList.remove("is-new"), 1500);
-
-    // Update session accumulators
-    _sessionSpins += 1;
-    _sessionWon   += entry.reward || 0;
-
-    // Update today stats immediately (optimistic, no DB round-trip)
-    const todaySpinsEl = $("stat-today-spins");
-    const todayWonEl   = $("stat-today-won");
-    if (todaySpinsEl) {
-      const prev = parseInt(todaySpinsEl.textContent) || 0;
-      todaySpinsEl.textContent = prev + 1;
-      animateBump(todaySpinsEl, "stat-bump");
-    }
-    if (todayWonEl && entry.reward > 0) {
-      const prev = parseFloat((todayWonEl.textContent || "0").replace("₱","")) || 0;
-      todayWonEl.textContent = formatCurrency(prev + entry.reward);
-      animateBump(todayWonEl, "stat-bump");
-    }
-
-    // Update badge count
-    const badge = $("history-count");
-    if (badge) {
-      badge.textContent = parseInt(badge.textContent || "0") + 1;
-      animateBump(badge, "stat-bump");
-    }
-
-    // Hide empty state
-    cls.add($("history-empty"), "hidden");
-  };
-
-  // ── Public: load full history from Firestore ──────
-
-  const load = async (uid) => {
-    const list = $("history-list");
-    if (!list) return;
-    list.innerHTML = "";
-
-    // Silently purge stale records in the background — no await so UI loads immediately
-    DB.purgeOldHistory(uid).catch(err => console.warn("[Purge] failed:", err));
-
-    // Reset stats to loading state
-    ["stat-today-spins","stat-today-won"].forEach(id => setStatEl(id, "…"));
-
+  async _loadHistory() {
+    const list = $("fruit-history");
+    if (!list || !State.user) return;
     try {
-      // Parallel fetch: today stats + recent list
-      const [todayItems, recentItems] = await Promise.all([
-        DB.getDayHistory(uid, todayStart(), todayEnd()),
-        DB.getRecentHistory(uid, 50),
-      ]);
+      const items = await DB.getSpins(State.user.uid, "fruit", 10);
+      list.innerHTML = "";
+      items.forEach(item => list.appendChild(this._buildHistItem(item)));
+    } catch { /* silent fail */ }
+  },
 
-      const sum = (items) => items.reduce((s, i) => s + (i.reward || 0), 0);
-
-      renderStats({
-        todaySpins: todayItems.length,
-        todayWon:   sum(todayItems),
-        totalCount: recentItems.length,
-      });
-
-      // Render recent list
-      recentItems.forEach(item => list.appendChild(buildItem(item)));
-      if (recentItems.length === 0) {
-        cls.remove($("history-empty"), "hidden");
-      } else {
-        cls.add($("history-empty"), "hidden");
-      }
-
-    } catch (err) {
-      console.error("History load failed:", err);
-      ["stat-today-spins","stat-today-won"]
-        .forEach(id => setStatEl(id, "—"));
-    }
-  };
-
-  return { prepend, load };
-})();
-
-// ═══════════════════════════════════════════════════
-// CREDITS MODULE
-// ═══════════════════════════════════════════════════
-
-const CreditsModule = (() => {
-  const setDisplay = (val) => {
-    const v = Math.floor(val);
-    $("hdr-credits").textContent   = v;
-    $("game-credits").textContent  = v;
-    $("match-credits").textContent = v;
-  };
-
-  const bump = () => {
-    animateBump($("hdr-credits"),  "bump");
-    animateBump($("game-credits"), "bump");
-  };
-  const flashInsufficient = () => animateBump($("game-credits"), "flash-red");
-
-  const deduct = async (amount) => {
-    const current = State.userData.credits;
-    if (current < amount) return false;
-    const updated = current - amount;
-    State.userData.credits = updated;
-    setDisplay(updated);
-    await DB.updateCredits(State.user.uid, updated);
-    return true;
-  };
-
-  const add = async (amount) => {
-    const updated = State.userData.credits + amount;
-    State.userData.credits = updated;
-    setDisplay(updated);
-    bump();
-    await DB.updateCredits(State.user.uid, updated);
-  };
-
-  return { setDisplay, deduct, add, flashInsufficient };
-})();
-
-// ═══════════════════════════════════════════════════
-// DAILY REWARD MODULE
-// ═══════════════════════════════════════════════════
-
-const DailyReward = (() => {
-  const REWARD_PER_DAY = 100;
-  const MS_PER_DAY     = 24 * 60 * 60 * 1000;
-
-  let _countdownInterval = null;
-
-  const getLastClaim = () => {
-    const raw = State.userData.lastClaimAt;
-    if (!raw) return null;
-    if (raw.toDate) return raw.toDate();
-    if (raw instanceof Date) return raw;
-    return new Date(raw);
-  };
-
-  const getAvailableReward = () => {
-    const last = getLastClaim();
-    if (!last) return REWARD_PER_DAY;
-    const elapsedMs = Date.now() - last.getTime();
-    return Math.floor(elapsedMs / MS_PER_DAY) * REWARD_PER_DAY;
-  };
-
-  const getMsUntilNext = () => {
-    const last = getLastClaim();
-    if (!last) return 0;
-    const elapsedMs = Date.now() - last.getTime();
-    const remainder = elapsedMs % MS_PER_DAY;
-    return MS_PER_DAY - remainder;
-  };
-
-  const fmtCountdown = (ms) => {
-    const totalSec = Math.max(0, Math.floor(ms / 1000));
-    const h = Math.floor(totalSec / 3600);
-    const m = Math.floor((totalSec % 3600) / 60);
-    const s = totalSec % 60;
-    return [h, m, s].map(v => String(v).padStart(2, "0")).join(":");
-  };
-
-  const container = () => document.querySelector(".daily-reward");
-
-  const renderClaimable = (amount) => {
-    const c = container();
-    if (!c) return;
-    c.innerHTML = `
-      <span class="credits-label">
-        🎉 Daily Rewards <b id="daily-reward-amount" class="credits-val">${amount}</b>
+  _buildHistItem(item) {
+    const el   = document.createElement("div");
+    el.className = "fh-item";
+    const sym  = item.symbols || "?";
+    const won  = item.coinsWon ?? 0;
+    const cost = item.coinsCost ?? FRUIT_SPIN_COST;
+    const net  = won - cost;
+    const date = toDate(item.createdAt);
+    const isWin = net >= 0;
+    el.innerHTML = `
+      <span class="fh-emoji">${sym}</span>
+      <span class="fh-label">
+        ${won > 0 ? "Collected" : "Bomb!"}
+        · <i class="bi bi-clock"></i> ${date ? fmt.time(date) : "now"}
       </span>
-      <button id="btn-claim-reward" class="btn btn-claim-reward">🎁 Claim</button>`;
-    c.querySelector("#btn-claim-reward").addEventListener("click", claim);
-  };
-
-  const renderCountdown = () => {
-    stopCountdown();
-    const c = container();
-    if (!c) return;
-    c.innerHTML = `
-      <span class="credits-label daily-waiting">
-        Free +100 credits in <b id="daily-countdown" class="credits-val countdown-val"></b>
+      <span class="${isWin ? "fh-win" : "fh-loss"}">
+        ${isWin ? "+" : ""}${fmt.coins(net)}
       </span>`;
+    return el;
+  },
 
-    const tick = () => {
-      const msLeft = getMsUntilNext();
-      const el = document.getElementById("daily-countdown");
-      if (el) el.textContent = fmtCountdown(msLeft);
-      if (msLeft <= 1000) { stopCountdown(); updateUI(); }
-    };
-    tick();
-    _countdownInterval = setInterval(tick, 1000);
-  };
+  _prependHist(symbol, coinsWon) {
+    const list = $("fruit-history");
+    if (!list) return;
+    const el = this._buildHistItem({ symbols: symbol, coinsWon, coinsCost: FRUIT_SPIN_COST, createdAt: null });
+    list.prepend(el);
+    while (list.children.length > 15) list.lastChild?.remove();
+  },
 
-  const stopCountdown = () => {
-    if (_countdownInterval !== null) {
-      clearInterval(_countdownInterval);
-      _countdownInterval = null;
+  async spin() {
+    if (State.fruitSpinning) return;
+    if (Coins.get() < FRUIT_SPIN_COST) {
+      Toast.show("Not enough coins!", "loss"); return;
     }
-  };
 
-  const updateUI = () => {
-    const amount = getAvailableReward();
-    if (amount > 0) { stopCountdown(); renderClaimable(amount); }
-    else            { renderCountdown(); }
-  };
+    State.fruitSpinning = true;
+    const btn = $("btn-fruit-spin");
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> SPINNING…`;
+    }
+    cls.add($("fruit-result"), "hidden");
 
-  const claim = async () => {
-    const amount = getAvailableReward();
-    if (amount <= 0) return;
-    const btn = document.getElementById("btn-claim-reward");
-    if (btn) btn.disabled = true;
-    await CreditsModule.add(amount);
-    const now = new Date();
-    State.userData.lastClaimAt = now;
-    await updateDoc(DB.userRef(State.user.uid), { lastClaimAt: now });
-    renderCountdown();
-  };
+    await Coins.deduct(FRUIT_SPIN_COST);
+    this._refreshCoins();
 
-  return { updateUI, claim, stopCountdown };
-})();
+    // Pick weighted winner
+    const winner = weightedPick(FRUIT_ITEMS, FRUIT_TOTAL_WEIGHT);
+    const matchingIdx = FruitGrid.BORDER.filter(idx => FruitGrid.FRUIT_AT[idx].emoji === winner.emoji);
+    const winnerIdx   = matchingIdx.length
+      ? matchingIdx[Math.floor(Math.random() * matchingIdx.length)]
+      : FruitGrid.BORDER[Math.floor(Math.random() * FruitGrid.BORDER.length)];
+
+    // Animate the light scanner
+    const ticks = Math.floor(FRUIT_SPIN_MS / FRUIT_TICK_MS);
+    for (let t = 0; t < ticks; t++) {
+      FruitGrid.setLit(FruitGrid.BORDER[t % FruitGrid.BORDER.length]);
+      Sound.tick();
+      await sleep(FRUIT_TICK_MS);
+    }
+    FruitGrid.setWinner(winnerIdx, winner.emoji === "💣");
+
+    // Show result
+    const isBomb   = winner.emoji === "💣";
+    const resultEl = $("fruit-result");
+    if (resultEl) {
+      resultEl.innerHTML = isBomb
+        ? `<i class="bi bi-exclamation-octagon-fill"></i> BOMB! No reward.`
+        : `${winner.emoji} <i class="bi bi-plus-circle-fill"></i> ${fmt.coins(winner.value)} coins!`;
+      resultEl.className = "fruit-result" + (isBomb ? " bomb" : "");
+      cls.remove(resultEl, "hidden");
+    }
+
+    // Sound & toast
+    if (isBomb) {
+      Sound.bomb();
+      Toast.show("Bomb! Better luck next spin.", "loss");
+    } else {
+      Sound.win();
+      await Coins.add(winner.value);
+      this._refreshCoins();
+      Toast.show(`+${fmt.coins(winner.value)} coins!`, "win");
+    }
+
+    // Persist stats
+    const newFruitSpins = (State.userData.totalFruitSpins || 0) + 1;
+    const newBestWin    = Math.max(State.userData.bestWin || 0, winner.value);
+    State.userData.totalFruitSpins = newFruitSpins;
+    State.userData.bestWin         = newBestWin;
+    await DB.updateUser(State.user.uid, {
+      totalFruitSpins: newFruitSpins,
+      bestWin:         newBestWin,
+    });
+    DB.logSpin(State.user.uid, "fruit", winner.emoji, winner.value, FRUIT_SPIN_COST).catch(() => {});
+    this._prependHist(winner.emoji, winner.value);
+
+    State.fruitSpinning = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i class="bi bi-arrow-clockwise"></i> SPIN`;
+    }
+  },
+};
 
 // ═══════════════════════════════════════════════════
-// SOUND MODULE
+//  LUCKY 777 GAME
+// ═══════════════════════════════════════════════════
+
+const LuckyGame = {
+  init() {
+    $("btn-lucky-pull")?.addEventListener("click", () => this.pull());
+    $("back-lucky")?.addEventListener("click",     () => {
+      cls.add($("overlay-lucky"), "hidden");
+    });
+    $("open-lucky")?.addEventListener("click",     () => this.open());
+    this._buildReels();
+  },
+
+  open() {
+    cls.remove($("overlay-lucky"), "hidden");
+    cls.add($("lucky-result"), "hidden");
+    this._refreshCoins();
+    this._loadHistory();
+    this._resetReels();
+  },
+
+  _refreshCoins() {
+    const el = $("lucky-coins-display");
+    if (el) el.textContent = fmt.coins(Coins.get());
+  },
+
+  _buildReels() {
+    for (let r = 0; r < 3; r++) {
+      const strip = $(`strip-${r}`);
+      if (!strip) continue;
+      strip.innerHTML = "";
+      for (let i = 0; i < 40; i++) {
+        const sym = LUCKY_SYMBOLS[Math.floor(Math.random() * LUCKY_SYMBOLS.length)];
+        const div = document.createElement("div");
+        div.className   = "reel-symbol";
+        div.textContent = sym;
+        strip.appendChild(div);
+      }
+    }
+  },
+
+  _resetReels() {
+    for (let r = 0; r < 3; r++) {
+      const strip = $(`strip-${r}`);
+      if (strip) strip.style.transform = "translateY(0)";
+    }
+  },
+
+  async _animateReel(reelIdx, targetSymbol, duration) {
+    const strip = $(`strip-${reelIdx}`);
+    if (!strip) return;
+    const symbolH   = 100;
+    const symbols   = strip.querySelectorAll(".reel-symbol");
+    const targetIdx = symbols.length - 1;
+
+    // Place target at end
+    symbols[targetIdx].textContent = targetSymbol;
+    if (targetIdx > 0) {
+      symbols[targetIdx - 1].textContent =
+        LUCKY_SYMBOLS[Math.floor(Math.random() * LUCKY_SYMBOLS.length)];
+    }
+
+    const finalY = -(targetIdx * symbolH);
+    strip.style.transition = "none";
+    strip.style.transform  = "translateY(0)";
+    void strip.offsetWidth; // force reflow
+    strip.style.transition = `transform ${duration}ms cubic-bezier(.17,.67,.1,.98)`;
+    strip.style.transform  = `translateY(${finalY}px)`;
+    await sleep(duration);
+    strip.style.transition = "none";
+  },
+
+  _evalResult(symbols) {
+    const key = symbols.join("-");
+    if (LUCKY_PAYOUTS[key] !== undefined) return LUCKY_PAYOUTS[key];
+    if (symbols[0] === symbols[1] || symbols[1] === symbols[2] || symbols[0] === symbols[2])
+      return LUCKY_PARTIAL_WIN;
+    return 0;
+  },
+
+  async _loadHistory() {
+    const list = $("lucky-history");
+    if (!list || !State.user) return;
+    try {
+      const items = await DB.getSpins(State.user.uid, "lucky", 10);
+      list.innerHTML = "";
+      items.forEach(item => list.appendChild(this._buildHistItem(item)));
+    } catch { /* silent fail */ }
+  },
+
+  _buildHistItem(item) {
+    const el   = document.createElement("div");
+    el.className = "fh-item";
+    const syms = (item.symbols || "?-?-?").split(",");
+    const won  = item.coinsWon ?? 0;
+    const cost = item.coinsCost ?? LUCKY_PULL_COST;
+    const net  = won - cost;
+    const date = toDate(item.createdAt);
+    const isWin = net >= 0;
+    el.innerHTML = `
+      <span class="fh-emoji">${syms.slice(0, 3).join("")}</span>
+      <span class="fh-label">
+        ${won > 0 ? `Won ${fmt.coins(won)}` : "No match"}
+        · <i class="bi bi-clock"></i> ${date ? fmt.time(date) : "now"}
+      </span>
+      <span class="${isWin ? "fh-win" : "fh-loss"}">
+        ${isWin ? "+" : ""}${fmt.coins(net)}
+      </span>`;
+    return el;
+  },
+
+  _prependHist(symbols, coinsWon) {
+    const list = $("lucky-history");
+    if (!list) return;
+    const el = this._buildHistItem({
+      symbols:  symbols.join(","),
+      coinsWon,
+      coinsCost: LUCKY_PULL_COST,
+      createdAt: null,
+    });
+    list.prepend(el);
+    while (list.children.length > 15) list.lastChild?.remove();
+  },
+
+  async pull() {
+    if (State.luckySpinning) return;
+    if (Coins.get() < LUCKY_PULL_COST) {
+      Toast.show("Not enough coins!", "loss"); return;
+    }
+
+    State.luckySpinning = true;
+    const btn = $("btn-lucky-pull");
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> PULLING…`;
+    }
+    cls.add($("lucky-result"), "hidden");
+
+    await Coins.deduct(LUCKY_PULL_COST);
+    this._refreshCoins();
+
+    // Weighted symbol picker
+    const WEIGHTED = [
+      { sym:"7️⃣", w:2  }, { sym:"💎", w:5  }, { sym:"⭐", w:10 },
+      { sym:"🍒", w:18 }, { sym:"🍋", w:20 }, { sym:"🔔", w:20 },
+      { sym:"🍇", w:14 }, { sym:"🍀", w:11 },
+    ];
+    const totalW  = WEIGHTED.reduce((s, x) => s + x.w, 0);
+    const pickSym = () => {
+      let r = Math.random() * totalW;
+      for (const x of WEIGHTED) { r -= x.w; if (r <= 0) return x.sym; }
+      return "🍋";
+    };
+    const picked = [pickSym(), pickSym(), pickSym()];
+
+    // Animate
+    const lights = qs(".slot-lights");
+    if (lights) cls.add(lights, "spinning");
+    Sound.reelSpin();
+
+    const durations = [1200, 1700, 2200];
+    await Promise.all(picked.map((sym, i) => this._animateReel(i, sym, durations[i])));
+    if (lights) cls.remove(lights, "spinning");
+
+    // Evaluate
+    const coinsWon  = this._evalResult(picked);
+    const isJackpot = picked.join("-") === "7️⃣-7️⃣-7️⃣";
+
+    // Show result
+    const resultEl = $("lucky-result");
+    if (resultEl) {
+      if (isJackpot) {
+        resultEl.innerHTML = `<i class="bi bi-stars"></i> JACKPOT! +${fmt.coins(coinsWon)} coins!`;
+        resultEl.className = "lucky-result jackpot";
+      } else if (coinsWon > 0) {
+        resultEl.innerHTML = `${picked.join("")} <i class="bi bi-plus-circle-fill"></i> ${fmt.coins(coinsWon)} coins!`;
+        resultEl.className = "lucky-result";
+      } else {
+        resultEl.innerHTML = `${picked.join("")} <i class="bi bi-dash-circle-fill"></i> No match. Try again!`;
+        resultEl.className = "lucky-result loss";
+      }
+      cls.remove(resultEl, "hidden");
+    }
+
+    // Sound & toast
+    if (isJackpot) {
+      Sound.jackpot();
+      Toast.show(`JACKPOT! +${fmt.coins(coinsWon)} coins!`, "jackpot", 4000);
+    } else if (coinsWon > 0) {
+      Sound.win();
+      Toast.show(`+${fmt.coins(coinsWon)} coins!`, "win");
+    } else {
+      Sound.bomb();
+      Toast.show("No match. Keep trying!", "loss");
+    }
+
+    if (coinsWon > 0) {
+      await Coins.add(coinsWon);
+      this._refreshCoins();
+    }
+
+    // Persist stats
+    const newLuckySpins = (State.userData.totalLuckySpins || 0) + 1;
+    const newBestWin    = Math.max(State.userData.bestWin || 0, coinsWon);
+    State.userData.totalLuckySpins = newLuckySpins;
+    State.userData.bestWin         = newBestWin;
+    await DB.updateUser(State.user.uid, {
+      totalLuckySpins: newLuckySpins,
+      bestWin:         newBestWin,
+    });
+    DB.logSpin(State.user.uid, "lucky", picked, coinsWon, LUCKY_PULL_COST).catch(() => {});
+    this._prependHist(picked, coinsWon);
+
+    State.luckySpinning = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i class="bi bi-stars"></i> PULL`;
+    }
+  },
+};
+
+// ═══════════════════════════════════════════════════
+//  SOUND MODULE (Web Audio API)
 // ═══════════════════════════════════════════════════
 
 const Sound = (() => {
-  let ctx;
-  const getCtx = () => {
-    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-    return ctx;
+  let _ctx;
+  const ctx = () => {
+    if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return _ctx;
   };
-  const playTone = (freq = 800, duration = 0.05, type = "square", volume = 0.05) => {
-    const audioCtx = getCtx();
-    const osc  = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    gain.gain.value = volume;
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-    osc.stop(audioCtx.currentTime + duration);
+
+  const tone = (freq, dur, type = "square", vol = 0.06) => {
+    try {
+      const c = ctx();
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type          = type;
+      o.frequency.value = freq;
+      g.gain.value    = vol;
+      o.connect(g);
+      g.connect(c.destination);
+      o.start();
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+      o.stop(c.currentTime + dur);
+    } catch {}
   };
+
   return {
-    tick: () => playTone(900,  0.03),
-    win:  () => playTone(1200, 0.15),
-    bomb: () => playTone(120,  0.25, "sawtooth", 0.08),
-  };
-})();
-
-// ═══════════════════════════════════════════════════
-// SPIN MODULE
-// ═══════════════════════════════════════════════════
-
-const SpinModule = (() => {
-  const spinBtn = () => $("btn-spin");
-
-  /**
-   * Central lock setter — always keeps State.isSpinning and the
-   * button's disabled attribute in sync. Call this in ONE place only.
-   */
-  const setSpinning = (v) => {
-    State.isSpinning   = v;
-    spinBtn().disabled = v;
-  };
-
-  const showResult = (fruit) => {
-    const resultEl = $("result-text");
-    if (fruit.emoji === "💣") {
-      resultEl.textContent = "💥 BOOM! Fruit Bomb! You got nothing.";
-      resultEl.style.color = "#ff4444";
-    } else {
-      resultEl.textContent = `You got ${fruit.emoji} = ${formatCurrency(fruit.value)}`;
-      resultEl.style.color = "";
-    }
-    showEl($("result-display"));
-  };
-
-  const animate = async (borders) => {
-    const ticks        = Math.floor(GAME_CONFIG.SPIN_DURATION_MS / GAME_CONFIG.TICK_MS);
-    const winningFruit = getWeightedFruit();
-
-    // let winnerIdx = borders.find(idx =>
-    //   GridModule.getFruitAt(idx).emoji === winningFruit.emoji
-    // );
-    // if (winnerIdx === undefined) {
-    //   winnerIdx = borders[Math.floor(Math.random() * borders.length)];
-    // }
-
-    const matchingIndices = borders.filter(idx =>
-      GridModule.getFruitAt(idx).emoji === winningFruit.emoji
-    );
-
-    const winnerIdx =
-      matchingIndices[Math.floor(Math.random() * matchingIndices.length)];
-
-    for (let t = 0; t < ticks; t++) {
-      GridModule.setLit(borders[t % borders.length]);
-      Sound.tick();
-      await sleep(GAME_CONFIG.TICK_MS);
-    }
-
-    GridModule.setWinner(winnerIdx);
-    if (winningFruit.emoji === "💣") Sound.bomb();
-    else Sound.win();
-
-    return winningFruit;
-  };
-
-  const spin = async () => {
-    // ─────────────────────────────────────────────────────────────
-    // RAPID-CLICK GUARD: lock immediately — before any async work.
-    // This is a synchronous check+set so no second click can slip
-    // through between an await and the next state check.
-    // ─────────────────────────────────────────────────────────────
-    if (State.isSpinning) return;
-    setSpinning(true);            // ← lock FIRST, async work AFTER
-
-    // Insufficient credits check
-    if (State.userData.credits < GAME_CONFIG.SPIN_COST) {
-      CreditsModule.flashInsufficient();
-      $("result-text").textContent = "⚠️ Not enough credits!";
-      $("result-text").style.color = "";
-      showEl($("result-display"));
-      setSpinning(false);         // release lock so user can try again
-      return;
-    }
-
-    hideEl($("result-display"));
-
-    // Deduct credits (we already confirmed balance above)
-    await CreditsModule.deduct(GAME_CONFIG.SPIN_COST);
-
-    const fruit = await animate(GridModule.getBorderIndices());
-    showResult(fruit);
-
-    if (fruit.value > 0) {
-      await CreditsModule.add(fruit.value);
-    }
-
-    DB.logHistory(State.user.uid, fruit.emoji, fruit.value).catch(() => {});
-    HistoryModule.prepend({ result: fruit.emoji, reward: fruit.value, createdAt: null });
-    LeaderboardModule.refreshCurrentUser();
-
-    setSpinning(false);           // release lock when fully done
-  };
-
-  return { spin };
-})();
-
-// ═══════════════════════════════════════════════════
-// POP MATCH SHOP MODULE  (inline panel, above pm-shell)
-// ═══════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════
-// POP MATCH SHOP MODULE  (inline panel, above pm-shell)
-// ═══════════════════════════════════════════════════
-
-const ShopModule = (() => {
-  let _inventory = {
-    ownedPresets: ["default", "classic"],
-    activeColor:  "default",
-    activeEmoji:  "classic",
-  };
-
-  // Which preset is currently being previewed (clicked), null = none
-  let _previewId   = null;
-  let _previewType = null;
-
-  // ── Init ──────────────────────────────────────────
-
-  const init = async () => {
-    if (!State.user) return;
-    _inventory = await DB.getInventory(State.user.uid);
-    if (!_inventory.ownedPresets.includes("default"))
-      _inventory.ownedPresets.push("default");
-    if (!_inventory.ownedPresets.includes("classic"))
-      _inventory.ownedPresets.push("classic");
-    applyActive();
-  };
-
-  // ── Apply active preset to board CSS vars ──────────
-
-  const applyActive = () => {
-    const colorPreset = PM_PRESETS.colors.find(c => c.id === _inventory.activeColor)
-      ?? PM_PRESETS.colors[0];
-    applyColorPreset(colorPreset.preview);
-  };
-
-  const applyColorPreset = ({ cardBorder, matched, glow }) => {
-    const board = $("pm-board");
-    if (!board) return;
-    board.style.setProperty("--pm-card-border",    cardBorder);
-    board.style.setProperty("--pm-matched-bg",     matched);
-    board.style.setProperty("--pm-matched-border", matched);
-    board.style.setProperty("--pm-card-glow",      glow);
-  };
-
-  const getActiveSymbols = () => {
-    const pack = PM_PRESETS.emojis.find(e => e.id === _inventory.activeEmoji)
-      ?? PM_PRESETS.emojis[0];
-    return pack.symbols;
-  };
-
-  // ── Click-to-preview ──────────────────────────────
-  // Clicking a card toggles it as the previewed preset.
-  // Clicking the same card again deselects (reverts board).
-  // Only color themes preview live on the board below.
-
-  const togglePreview = (type, presetId) => {
-    const alreadyPreviewing = _previewId === presetId && _previewType === type;
-
-    if (alreadyPreviewing) {
-      // Deselect — revert board and clear preview state
-      _previewId   = null;
-      _previewType = null;
-      applyActive();
-    } else {
-      // Select this preset as the active preview
-      _previewId   = presetId;
-      _previewType = type;
-      if (type === "color") {
-        const p = PM_PRESETS.colors.find(c => c.id === presetId);
-        if (p) applyColorPreset(p.preview);
-      }
-    }
-
-    renderShopUI();
-  };
-
-  const clearPreview = () => {
-    _previewId   = null;
-    _previewType = null;
-    applyActive();
-  };
-
-  // ── Confirm dialog ────────────────────────────────
-
-  const showConfirm = (preset) => new Promise((resolve) => {
-    const overlay = $("pm-confirm-overlay");
-    const titleEl = $("pm-confirm-title");
-    const bodyEl  = $("pm-confirm-body");
-    const yesBtn  = $("pm-confirm-yes");
-    const noBtn   = $("pm-confirm-no");
-
-    titleEl.textContent = `Purchase "${preset.name}"?`;
-    bodyEl.innerHTML    = `You are about to buy <strong>${preset.name}</strong> for
-      <strong>${preset.price} credits</strong>.<br><br>
-      Are you sure you want to proceed?`;
-
-    cls.remove(overlay, "hidden");
-
-    const finish = (result) => {
-      cls.add(overlay, "hidden");
-      yesBtn.removeEventListener("click", onYes);
-      noBtn.removeEventListener("click",  onNo);
-      overlay.removeEventListener("click", onOverlay);
-      resolve(result);
-    };
-
-    const onYes     = () => finish(true);
-    const onNo      = () => finish(false);
-    const onOverlay = (e) => { if (e.target === overlay) finish(false); };
-
-    yesBtn.addEventListener("click",  onYes);
-    noBtn.addEventListener("click",   onNo);
-    overlay.addEventListener("click", onOverlay);
-  });
-
-  // ── Purchase / equip ──────────────────────────────
-
-  const purchase = async (type, presetId) => {
-    const list   = type === "color" ? PM_PRESETS.colors : PM_PRESETS.emojis;
-    const preset = list.find(p => p.id === presetId);
-    if (!preset) return;
-
-    // Already owned → equip directly, no confirm needed
-    if (_inventory.ownedPresets.includes(presetId)) {
-      await equipPreset(type, presetId);
-      return;
-    }
-
-    // Not enough credits
-    if (State.userData.credits < preset.price) {
-      showShopMsg("Not enough credits!", "error");
-      return;
-    }
-
-    // Confirm dialog
-    const confirmed = await showConfirm(preset);
-    if (!confirmed) {
-      showShopMsg("Purchase cancelled.", "");
-      return;
-    }
-
-    // Deduct and unlock
-    await CreditsModule.deduct(preset.price);
-    _inventory.ownedPresets.push(presetId);
-    await DB.saveInventory(State.user.uid, _inventory);
-
-    await equipPreset(type, presetId);
-    showShopMsg(`✅ ${preset.name} purchased & equipped!`, "success");
-  };
-
-  const equipPreset = async (type, presetId) => {
-    if (type === "color") _inventory.activeColor = presetId;
-    else                  _inventory.activeEmoji = presetId;
-
-    clearPreview();
-    await DB.saveInventory(State.user.uid, _inventory);
-    applyActive();
-    renderShopUI();
-    renderEquippedTheme();   // ← add this
-    showShopMsg("✅ Equipped!", "success");
-  };
-
-  // ── Shop message toast ────────────────────────────
-  const showShopMsg = (text, type = "") => Toast.show(text, type);
-
-  // ── Render ────────────────────────────────────────
-
-  const renderShopUI = () => {
-    renderSection("color");
-    renderSection("emoji");
-  };
-
-  const renderSection = (type) => {
-    const container = $(`pm-shop-${type}-grid`);
-    if (!container) return;
-    container.innerHTML = "";
-
-    const list     = type === "color" ? PM_PRESETS.colors : PM_PRESETS.emojis;
-    const activeId = type === "color" ? _inventory.activeColor : _inventory.activeEmoji;
-
-    list.forEach(preset => {
-      const owned      = _inventory.ownedPresets.includes(preset.id);
-      const isActive   = preset.id === activeId;
-      const isPrev     = preset.id === _previewId && type === _previewType;
-
-      const card = document.createElement("div");
-      card.className = [
-        "pm-shop-card",
-        isActive ? "pm-shop-card-active"  : "",
-        isPrev   ? "pm-shop-card-preview" : "",
-      ].filter(Boolean).join(" ");
-
-      // Visual
-      const visual = type === "color"
-        ? `<div class="pm-shop-swatch" style="
-              border-color:${preset.preview.cardBorder};
-              box-shadow: 0 0 10px ${preset.preview.glow};
-           ">
-             <div class="pm-shop-swatch-inner" style="background:${preset.preview.matched}"></div>
-           </div>`
-        : `<div class="pm-shop-emoji-preview">
-             ${preset.symbols.slice(0, 6).map(s => `<span>${s}</span>`).join("")}
-           </div>`;
-
-      // Status badge
-      let badge = "";
-      if (isActive)       badge = `<span class="pm-shop-badge equipped">✓ EQUIPPED</span>`;
-      else if (isPrev)    badge = `<span class="pm-shop-badge previewing">👁 PREVIEWING</span>`;
-      else if (owned)     badge = `<span class="pm-shop-badge owned">OWNED</span>`;
-      else if (preset.free) badge = `<span class="pm-shop-badge free">FREE</span>`;
-      else                badge = `<span class="pm-shop-badge price" style="display: none;">${preset.price} cr</span>`;
-
-      // Action button — shown below the badge
-      // • Already equipped  → no button (it IS active)
-      // • Owned but not equipped → "Equip" button
-      // • Not owned, free   → "Equip" button
-      // • Not owned, paid   → "Buy & Equip" button (shown always, not just in preview)
-      let actionBtn = "";
-      if (!isActive) {
-        if (owned || preset.free) {
-          actionBtn = `<button class="pm-shop-action-btn pm-shop-equip-btn" data-id="${preset.id}" data-type="${type}">
-            Equip
-          </button>`;
-        } else {
-          actionBtn = `<button class="pm-shop-action-btn pm-shop-buy-btn" data-id="${preset.id}" data-type="${type}">
-            🛒 Buy · ${preset.price} cr
-          </button>`;
-        }
-      }
-
-      card.innerHTML = `
-        ${visual}
-        <div class="pm-shop-card-info">
-          <span class="pm-shop-card-name">${preset.name}</span>
-          <span class="pm-shop-card-desc">${preset.desc}</span>
-          ${badge}
-          ${actionBtn}
-        </div>`;
-
-      // Clicking the card itself toggles preview
-      card.addEventListener("click", (e) => {
-        // Don't trigger preview when clicking the action button
-        if (e.target.closest(".pm-shop-action-btn")) return;
-        if (!isActive) togglePreview(type, preset.id);
-      });
-
-      // Action button click → purchase or equip
-      card.querySelector(".pm-shop-action-btn")
-        ?.addEventListener("click", (e) => {
-          e.stopPropagation();
-          purchase(type, preset.id);
+    tick:     () => tone(920, .03),
+    win:      () => tone(1300, .18, "sine", .07),
+    bomb:     () => tone(110,  .3,  "sawtooth", .09),
+    reelSpin: () => tone(700,  .07, "sawtooth", .04),
+    jackpot:  () => {
+      try {
+        const c = ctx();
+        [1200,1500,1800,2200].forEach((f, i) => {
+          setTimeout(() => {
+            const o = c.createOscillator();
+            const g = c.createGain();
+            o.type          = "sine";
+            o.frequency.value = f;
+            g.gain.value    = .22;
+            o.connect(g);
+            g.connect(c.destination);
+            o.start();
+            g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + .55);
+            o.stop(c.currentTime + .55);
+          }, i * 80);
         });
-
-      container.appendChild(card);
-    });
-  };
-
-  // ── Tab switcher ──────────────────────────────────
-
-  const switchShopTab = (tab) => {
-    clearPreview();
-    ["color", "emoji"].forEach(t => {
-      $(`pm-shop-tab-${t}`)?.classList.toggle("pm-shop-tab-active", t === tab);
-      $(`pm-shop-section-${t}`)?.classList.toggle("hidden",         t !== tab);
-    });
-  };
-
-  const renderEquippedTheme = () => {
-  const row = document.getElementById("pm-ci-equipped-row");
-  if (!row) return;
-
-  const colorPreset = PM_PRESETS.colors.find(c => c.id === _inventory.activeColor)
-    ?? PM_PRESETS.colors[0];
-  const emojiPreset = PM_PRESETS.emojis.find(e => e.id === _inventory.activeEmoji)
-    ?? PM_PRESETS.emojis[0];
-
-  row.innerHTML = `
-    <span class="pm-ci-equipped-label text-active">Currently Equipped: </span>
-    <span class="pm-ci-theme-pill">
-      <span class="pm-ci-theme-swatch" style="background:${colorPreset.preview.matched}"></span>
-      ${colorPreset.name}
-    </span>
-    <span class="pm-ci-theme-pill">
-      ${emojiPreset.symbols[0]}
-      ${emojiPreset.name}
-    </span>`;
-};
-
-  // ── Open / close ──────────────────────────────────
-
-  const open = async () => {
-    await init();
-    renderShopUI();
-    const panel = $("pm-shop-panel");
-    if (panel) {
-      cls.remove(panel, "hidden");
-      panel.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-    switchShopTab("color");
-  };
-
-  const close = () => {
-    clearPreview();
-    cls.add($("pm-shop-panel"), "hidden");
-  };
-
-  const cancelPreview = () => clearPreview();
-
-  return {
-    open, close, init, getActiveSymbols, applyActive,
-    switchShopTab, renderShopUI, cancelPreview,
-    renderEquippedTheme,   // ← add this
+      } catch {}
+    },
   };
 })();
 
 // ═══════════════════════════════════════════════════
-// POP MATCH MODULE
+//  AUTH STATE HANDLER
 // ═══════════════════════════════════════════════════
 
-class PopMatchGame {
-  constructor() {
-    // All DOM lookups use pm- prefixed IDs
-    this.board       = $("pm-board");
-    this.timerEl     = $("pm-timer");
-    this.scoreEl     = $("pm-score");
-    this.highScoreEl = $("pm-highScore");
-    this.comboEl     = $("pm-combo");
-    this.messageEl   = $("pm-message");
-    this.stageEl     = $("pm-stageNum");
-    this.mainBtn     = $("pm-mainBtn");
+const Auth = {
+  async onSignedIn(user) {
+    State.user     = user;
+    State.userData = await DB.getUser(user.uid);
 
-    // this.symbols = ["👾","🕹️","💎","⚡","👑","🎲","🚀","🔥","🌌","🌀"];
-    this.symbols = ShopModule.getActiveSymbols();
-    this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    this.currentStage = 1;
-    this.maxStages    = 5;
-
-    this.state = {
-      firstCard: null, secondCard: null,
-      lockBoard: false,
-      score: 0, combo: 0, matches: 0,
-      timer: 60, interval: null, running: false
-    };
-    this.isProcessing = false;
-  }
-
-  /** Called by Router each time the screen is entered */
-  async mount() {
-    await ShopModule.init();                      // ✅ wait for Firestore inventory to load
-    this.symbols = ShopModule.getActiveSymbols(); // now reads the correct saved preset
-    ShopModule.applyActive();
-    ShopModule.renderEquippedTheme(); 
-    this.resetFullGame();
-    this.createBoard();
-    this.bindEvents();
-    this.loadHighScore();
-    this.updateButtonState();
-  }
-
-  /** Called by Router when leaving the screen — stops the timer */
-  unmount() {
-    clearInterval(this.state.interval);
-    this.state.running = false;
-    // Remove the mainBtn listener to avoid stacking on re-entry
-    this.mainBtn.replaceWith(this.mainBtn.cloneNode(true));
-    this.mainBtn = $("pm-mainBtn");
-  }
-
-  bindEvents() {
-    // replaceWith above ensures only one listener exists at a time
-    this.mainBtn.addEventListener("click", () => {
-      if (!this.state.running && !this.isProcessing) this.startNewGame();
-    });
-  }
-
-  getStageConfig(stage) {
-    return {
-      pairs: 4 + (stage - 1) * 2,
-      time:  Math.max(35, 68 - stage * 5),
-      cols:  stage >= 4 ? 5 : 4
-    };
-  }
-
-  shuffle(array) { return array.sort(() => Math.random() - 0.5); }
-
-  createBoard() {
-    this.board.innerHTML = "";
-    const config = this.getStageConfig(this.currentStage);
-    this.board.style.gridTemplateColumns = `repeat(${config.cols}, 1fr)`;
-
-    const selected = this.symbols.slice(0, config.pairs);
-    this.shuffle([...selected, ...selected]).forEach(symbol => {
-      const card = document.createElement("div");
-      card.className    = "pm-card";          // ← pm- prefix
-      card.dataset.symbol = symbol;
-      card.textContent  = "?";
-      card.addEventListener("click", () => this.onCardClick(card));
-      this.board.appendChild(card);
-    });
-  }
-
-  onCardClick(card) {
-    if (!this.state.running || this.state.lockBoard || this.isProcessing ||
-        card.classList.contains("matched") || card === this.state.firstCard) return;
-
-    this.playSound("flip");
-    this.revealCard(card);
-
-    if (!this.state.firstCard) { this.state.firstCard = card; return; }
-    this.state.secondCard = card;
-    this.validateMatch();
-  }
-
-  revealCard(card) { card.textContent = card.dataset.symbol; card.classList.add("revealed"); }
-  hideCard(card)   { if (card) { card.textContent = "?"; card.classList.remove("revealed"); } }
-
-  validateMatch() {
-    this.isProcessing = true;
-    this.state.lockBoard = true;
-    const isMatch = this.state.firstCard.dataset.symbol === this.state.secondCard.dataset.symbol;
-    isMatch ? this.handleMatch() : this.handleMismatch();
-  }
-
-  handleMatch() {
-    this.state.matches++;
-    this.state.combo++;
-    const points = this.state.combo * 12;
-    this.state.score += points;
-    this.updateUI();
-    this.playSound("match");
-    this.state.firstCard.classList.add("matched");
-    this.state.secondCard.classList.add("matched");
-    this.showMessage(`+${points}`, "success");
-    this.resetTurn();
-    const config = this.getStageConfig(this.currentStage);
-    if (this.state.matches === config.pairs) this.completeStage();
-    else this.isProcessing = false;
-  }
-
-  handleMismatch() {
-    this.playSound("miss");
-    this.showMessage("MISS!");
-    setTimeout(() => {
-      this.hideCard(this.state.firstCard);
-      this.hideCard(this.state.secondCard);
-      this.resetTurn();
-      this.isProcessing = false;
-    }, 680);
-  }
-
-  resetTurn() {
-    this.state.firstCard = null;
-    this.state.secondCard = null;
-    this.state.lockBoard = false;
-  }
-
-  async completeStage() {
-    this.state.running = false;
-    this.isProcessing  = true;
-    this.updateButtonState();
-
-    // ── Score bonus (cosmetic, not credits) ──────────
-    const bonus = this.currentStage * 150;
-    this.state.score += bonus;
-    this.updateUI();
-    this.playSound("win");
-
-    // ── Credit reward for clearing this stage ────────
-    await this._awardStageCredits(this.currentStage);
-
-    this.showMessage(`STAGE ${this.currentStage} CLEAR! +${bonus} pts`, "success");
-
-    setTimeout(() => {
-      if (this.currentStage < this.maxStages) { this.currentStage++; this.startNextStage(); }
-      else this.endGame(true);
-    }, 1600);
-  }
-
-  /**
-   * Awards credits for clearing a stage, respecting the daily cap.
-   * Shows a toast in the result message and updates the credits display.
-   * Silent no-op if the user is not signed in or cap is already reached.
-   */
-  async _awardStageCredits(stage) {
-    if (!State.user || !State.userData) return;
-    const baseReward = POP_MATCH_CONFIG.STAGE_REWARDS[stage] ?? 0;
-    if (baseReward <= 0) return;
-    const dailyRuns   = await DB.getPopMatchDailyRuns(State.user.uid);
-    const multipliers = POP_MATCH_CONFIG.RUN_MULTIPLIERS;
-    const multiplier  = multipliers[Math.min(dailyRuns, multipliers.length - 1)];
-    const actual      = Math.max(1, Math.round(baseReward * multiplier));
-    await CreditsModule.add(actual);  // handles all display updates
-    if (stage === this.maxStages) await DB.incrementPopMatchDailyRuns(State.user.uid);
-    const runLabel = ["1st", "2nd", "3rd"];
-    const label    = dailyRuns < 3 ? runLabel[dailyRuns] : `${dailyRuns + 1}th`;
-    const note     = multiplier < 1
-      ? ` (${label} run today · ${Math.round(multiplier * 100)}% rewards)`
-      : ` (1st run today · full rewards!)`;
-    setTimeout(() => Toast.show(`+${actual} credits${note}`, "success"), 200);
-  }
-
-  startNewGame()  { this.resetFullGame(); this.startNextStage(); }
-
-  resetFullGame() {
-    clearInterval(this.state.interval);
-    this.currentStage = 1;
-    this.stageEl.textContent = "1";
-    const initConfig = this.getStageConfig(1);
-    Object.assign(this.state, { score: 0, combo: 0, matches: 0, running: false, timer: initConfig.time });
-    this.isProcessing = false;
-    this.updateUI();
-  }
-
-  startNextStage() {
-    const config = this.getStageConfig(this.currentStage);
-    Object.assign(this.state, { timer: config.time, matches: 0, combo: 0 });
-    this.stageEl.textContent = this.currentStage;
-    this.updateUI();
-    this.createBoard();
-    this.state.running = true;
-    this.isProcessing  = false;
-    this.updateButtonState();
-    this.startTimer();
-  }
-
-  startTimer() {
-    clearInterval(this.state.interval);
-    this.state.interval = setInterval(() => {
-      if (!this.state.running) return;
-      this.state.timer--;
-      if (this.state.timer <= 0) {
-        this.state.timer = 0;
-        this.updateUI();
-        this.endGame(false);
-        return;
-      }
-      this.updateUI();
-    }, 1000);
-  }
-
-  endGame(win) {
-    clearInterval(this.state.interval);
-    this.state.running = false;
-    this.isProcessing  = false;
-    this.updateButtonState();
-    this.saveHighScore();
-
-    if (win) {
-      // Full clear already paid out per-stage — just celebrate
-      this.showMessage("GAME COMPLETE! LEGEND! 🎉", "success");
-      this.playSound("win");
-    } else {
-      this.showMessage("TIME'S UP! No credits for incomplete stages.", "error");
-      this.playSound("lose");
-    }
-  }
-
-  updateUI() {
-    this.scoreEl.textContent = this.state.score;
-    this.comboEl.textContent = `x${this.state.combo}`;
-    this.timerEl.textContent = this.state.timer;
-  }
-
-  updateButtonState() {
-    const fresh = this.currentStage === 1 && this.state.score === 0;
-    this.mainBtn.textContent = this.state.running ? "GAME IN PROGRESS" : (fresh ? "START GAME" : "PLAY AGAIN");
-    this.mainBtn.disabled    = this.state.running;
-  }
-
-  saveHighScore() {
-      const current = Number(localStorage.getItem("pop-highscore")) || 0;
-      if (this.state.score > current) {
-        localStorage.setItem("pop-highscore", this.state.score);
-        this.loadHighScore();
-
-        // Persist to Firestore so it appears on the dashboard leaderboard
-        if (State.user) {
-          updateDoc(DB.userRef(State.user.uid), {
-            popMatchHighScore: this.state.score
-          }).catch(err => console.warn("High score save failed:", err));
-        }
-      }
+    // Fallback: re-create doc if missing
+    if (!State.userData) {
+      const username = user.email.replace("@arcade2026.local", "");
+      State.userData = await DB.createUser(user.uid, username);
     }
 
-loadHighScore() {
-    // Prefer the Firestore value (set during mount) over localStorage
-    const stored = State.userData?.popMatchHighScore
-      || Number(localStorage.getItem("pop-highscore"))
-      || 0;
-    // Sync localStorage to whatever is highest
-    const local = Number(localStorage.getItem("pop-highscore")) || 0;
-    if (stored > local) localStorage.setItem("pop-highscore", stored);
-    this.highScoreEl.textContent = Math.max(stored, local);
-  }
+    Coins.set(State.userData.coins ?? 0);
+    ProfilePage.refresh();
+    Daily.init();
+    Router.init();
+    Router.go("home");
 
-  showMessage(text, type = "") {
-    Toast.show(text, type);
-  }
-
-  playSound(type) {
-    try {
-      const ctx  = this.audioCtx;
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      switch (type) {
-        case "flip":
-          osc.type = "sawtooth"; osc.frequency.value = 900; gain.gain.value = 0.12;
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-          osc.start(); osc.stop(ctx.currentTime + 0.15); break;
-        case "match":
-          osc.type = "sine"; osc.frequency.setValueAtTime(1100, ctx.currentTime);
-          osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 0.35);
-          gain.gain.value = 0.3; gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-          osc.start(); osc.stop(ctx.currentTime + 0.4); break;
-        case "miss":
-          osc.type = "square"; osc.frequency.value = 420; gain.gain.value = 0.2;
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-          osc.start(); osc.stop(ctx.currentTime + 0.45); break;
-        case "win":
-          [1200,1500,1800,2200].forEach((f,i) => setTimeout(() => {
-            const o = ctx.createOscillator(), g = ctx.createGain();
-            o.type = "sine"; o.frequency.value = f; g.gain.value = 0.25;
-            o.connect(g); g.connect(ctx.destination); o.start();
-            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-            o.stop(ctx.currentTime + 0.6);
-          }, i * 70)); break;
-        case "lose":
-          osc.type = "sawtooth"; osc.frequency.setValueAtTime(650, ctx.currentTime);
-          osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.9);
-          gain.gain.value = 0.25; gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9);
-          osc.start(); osc.stop(ctx.currentTime + 0.9); break;
-      }
-    } catch(e) {}
-  }
-}
-
-// Single instance — created once, mounted/unmounted by Router
-const popMatch = new PopMatchGame();
-
-// ═══════════════════════════════════════════════════
-// LEADERBOARD MODULE
-// Renders on dashboard (#dash-leaderboard-list)
-// and on fruit game sidebar (#leaderboard-list)
-// ═══════════════════════════════════════════════════
-
-const LeaderboardModule = (() => {
-  const MEDALS = ["🥇", "🥈", "🥉"];
-  let _activeTab = "credits"; // "credits" | "popmatch"
-
-  // ── Data fetching ─────────────────────────────────
-
-  const fetchCredits = () => DB.getLeaderboard(20);
-
-  const fetchPopMatch = async () => {
-    const q = query(
-      collection(db, "users"),
-      orderBy("popMatchHighScore", "desc"),
-      limit(20)
-    );
-    const snap = await getDocs(q);
-    return snap.docs
-      .map(d => ({ uid: d.id, ...d.data() }))
-      .filter(d => (d.popMatchHighScore ?? 0) > 0);
-  };
-
-  // ── Row builders ──────────────────────────────────
-
-  const buildCreditsRow = (entry, rank, currentUid) => {
-    const isMe    = entry.uid === currentUid;
-    const medal   = MEDALS[rank] ?? null;
-    const name    = entry.nickname?.trim() || entry.email?.split("@")[0] || "Player";
-    const credits = Math.floor(entry.credits ?? 0);
-    const el      = document.createElement("div");
-    el.className  = "lb-row" + (isMe ? " lb-row-me" : "");
-    el.innerHTML  = `
-      <span class="lb-rank">${medal ?? "#" + (rank + 1)}</span>
-      <span class="lb-name" title="${entry.email ?? ""}">${name}${isMe ? " <span class='lb-you'>YOU</span>" : ""}</span>
-      <span class="lb-credits">${credits.toLocaleString()}</span>`;
-    return el;
-  };
-
-  const buildPopMatchRow = (entry, rank, currentUid) => {
-    const isMe  = entry.uid === currentUid;
-    const medal = MEDALS[rank] ?? null;
-    const name  = entry.nickname?.trim() || entry.email?.split("@")[0] || "Player";
-    const score = Math.floor(entry.popMatchHighScore ?? 0);
-    const el    = document.createElement("div");
-    el.className = "lb-row" + (isMe ? " lb-row-me" : "");
-    el.innerHTML = `
-      <span class="lb-rank">${medal ?? "#" + (rank + 1)}</span>
-      <span class="lb-name" title="${entry.email ?? ""}">${name}${isMe ? " <span class='lb-you'>YOU</span>" : ""}</span>
-      <span class="lb-credits">${score.toLocaleString()} <span class="lb-pts">pts</span></span>`;
-    return el;
-  };
-
-  // ── Core render — writes to a given list element ──
-
-  const renderInto = (listEl, entries, tab, currentUid) => {
-    listEl.innerHTML = "";
-    if (entries.length === 0) {
-      listEl.innerHTML = `<div class="lb-empty">${
-        tab === "popmatch" ? "No scores yet." : "No players yet."
-      }</div>`;
-      return;
-    }
-    entries.forEach((entry, i) => {
-      listEl.appendChild(
-        tab === "popmatch"
-          ? buildPopMatchRow(entry, i, currentUid)
-          : buildCreditsRow(entry, i, currentUid)
-      );
+    Screens.splashOut(() => {
+      cls.remove($("screen-signin"), "active");
+      cls.remove($("app"), "hidden");
     });
-  };
+  },
 
-  // ── Render to ALL visible leaderboard containers ──
+  onSignedOut() {
+    State.user = State.userData = null;
+    Daily.stop();
+    cls.add($("overlay-fruit"), "hidden");
+    cls.add($("overlay-lucky"), "hidden");
+    cls.add($("app"), "hidden");
+    Screens.show("screen-signin");
 
-  const renderAll = (entries, tab) => {
-    const uid   = State.user?.uid;
-    const lists = [
-      $("dash-leaderboard-list"),   // dashboard
-      $("leaderboard-list"),        // fruit game sidebar
-    ].filter(Boolean);
-    lists.forEach(el => renderInto(el, entries, tab, uid));
-  };
+    // Reset forms
+    [
+      "login-username","login-password",
+      "signup-username","signup-password","signup-password-confirm",
+    ].forEach(id => { const el = $(id); if (el) el.value = ""; });
 
-  // ── Tab switcher (dashboard only) ─────────────────
-
-  const switchTab = async (tab) => {
-    _activeTab = tab;
-
-    // Update tab button states on dashboard
-    ["credits", "popmatch"].forEach(t => {
-      const btn = $(`lb-tab-${t}`);
-      if (btn) btn.classList.toggle("lb-tab-active", t === tab);
-    });
-
-    // Update count label
-    await load(tab);
-  };
-
-  // ── Public: load and render ───────────────────────
-
-  const load = async (tab = _activeTab) => {
-    // Set loading state in all containers
-    [$("dash-leaderboard-list"), $("leaderboard-list")]
-      .filter(Boolean)
-      .forEach(el => el.innerHTML = `<div class="lb-loading">Loading…</div>`);
-
-    // Update player count label (dashboard only)
-    const countEl = $("dash-lb-user-count");
-
-    try {
-      const entries = tab === "popmatch"
-        ? await fetchPopMatch()
-        : await fetchCredits();
-
-      if (countEl) countEl.textContent =
-        `${entries.length} player${entries.length !== 1 ? "s" : ""}`;
-
-      renderAll(entries, tab);
-    } catch (err) {
-      console.error("Leaderboard load failed:", err);
-      [$("dash-leaderboard-list"), $("leaderboard-list")]
-        .filter(Boolean)
-        .forEach(el => el.innerHTML = `<div class="lb-empty">Could not load.</div>`);
-    }
-  };
-
-  const refreshCurrentUser = () => load();
-
-  // ── Tab button wiring (called once after DOM ready) ─
-
-  const bindTabs = () => {
-    $("lb-tab-credits")?.addEventListener("click",  () => switchTab("credits"));
-    $("lb-tab-popmatch")?.addEventListener("click", () => switchTab("popmatch"));
-  };
-
-  return { load, refreshCurrentUser, bindTabs };
-})();
-
-// ═══════════════════════════════════════════════════
-// NICKNAME MODULE
-// Synced across both top-bars (dashboard + game screen)
-// Persisted to Firestore users/{uid}.nickname
-// ═══════════════════════════════════════════════════
-
-const NicknameModule = (() => {
-  // IDs for the two instances (dashboard + game screen)
-  const INSTANCES = [
-    { display: "dash-nickname-display", editBtn: "dash-nickname-edit-btn", input: "dash-nickname-input", saveBtn: "dash-nickname-save-btn" },
-    { display: "game-nickname-display", editBtn: "game-nickname-edit-btn", input: "game-nickname-input", saveBtn: "game-nickname-save-btn" },
-  ];
-
-  // ── Helpers ──────────────────────────────────────
-
-  /** Render the saved name (or placeholder) into all display spans */
-  const renderAll = (nickname) => {
-    INSTANCES.forEach(({ display }) => {
-      const el = $(display);
-      if (!el) return;
-      if (nickname) {
-        el.textContent = nickname;
-        cls.remove(el, "empty");
-      } else {
-        el.textContent = "Set your nickname…";
-        cls.add(el, "empty");
-      }
-    });
-  };
-
-  /** Switch one instance into edit mode */
-  const openEdit = ({ display, editBtn, input, saveBtn }) => {
-    const displayEl = $(display);
-    const editBtnEl = $(editBtn);
-    const inputEl   = $(input);
-    const saveBtnEl = $(saveBtn);
-
-    // Pre-fill with current nickname (not placeholder text)
-    inputEl.value = State.userData?.nickname || "";
-    cls.add(displayEl, "hidden");
-    cls.add(editBtnEl, "hidden");
-    cls.remove(inputEl,   "hidden");
-    cls.remove(saveBtnEl, "hidden");
-    inputEl.focus();
-    inputEl.select();
-  };
-
-  /** Switch one instance back to display mode */
-  const closeEdit = ({ display, editBtn, input, saveBtn }) => {
-    cls.remove($(display),  "hidden");
-    cls.remove($(editBtn),  "hidden");
-    cls.add($(input),   "hidden");
-    cls.add($(saveBtn), "hidden");
-  };
-
-  /** Save nickname to Firestore and update all displays */
-  const save = async ({ display, editBtn, input, saveBtn }) => {
-    const saveBtnEl = $(saveBtn);
-    const inputEl   = $(input);
-    const raw       = inputEl.value.trim();
-
-    // Validate: 1–20 chars, no special abuse
-    if (raw.length === 0) { inputEl.focus(); return; }
-
-    cls.add(saveBtnEl, "saving");
-    saveBtnEl.disabled = true;
-
-    try {
-      State.userData.nickname = raw;
-      await DB.updateNickname(State.user.uid, raw);
-      renderAll(raw);
-      closeEdit({ display, editBtn, input, saveBtn });
-
-      // Flash the saved name on BOTH displays
-      INSTANCES.forEach(({ display: d }) => animateBump($(d), "saved-flash"));
-    } catch (err) {
-      console.error("Nickname save failed:", err);
-    } finally {
-      cls.remove(saveBtnEl, "saving");
-      saveBtnEl.disabled = false;
-    }
-  };
-
-  // ── Public API ────────────────────────────────────
-
-  /** Call once after user data is loaded */
-  const init = (nickname) => {
-    renderAll(nickname);
-
-    INSTANCES.forEach((instance) => {
-      const { display, editBtn, input, saveBtn } = instance;
-
-      // Clicking the display text also opens edit
-      $(display)?.addEventListener("click", () => openEdit(instance));
-      $(editBtn)?.addEventListener("click", () => openEdit(instance));
-
-      // Save on ✓ button
-      $(saveBtn)?.addEventListener("click", () => save(instance));
-
-      // Save on Enter, cancel on Escape
-      $(input)?.addEventListener("keydown", (e) => {
-        if (e.key === "Enter")  { e.preventDefault(); save(instance); }
-        if (e.key === "Escape") { closeEdit(instance); }
-      });
-    });
-  };
-
-  return { init, renderAll };
-})();
-
-// ═══════════════════════════════════════════════════
-// AUTH MODULE
-// ═══════════════════════════════════════════════════
-
-const AuthModule = {
-  signIn:  () => signInWithPopup(auth, provider),
-  signOut: () => signOut(auth),
+    AuthScreen._clearErrors?.();
+    AuthScreen.switchTab?.("login");
+  },
 };
 
 // ═══════════════════════════════════════════════════
-// UI EVENT BINDINGS
+//  BOOT
 // ═══════════════════════════════════════════════════
 
-const bindEvents = () => {
-  $("btn-google-signin").addEventListener("click", async () => {
-    const btn   = $("btn-google-signin");
-    const errEl = $("auth-error");
-    btn.disabled = true;
-    hideEl(errEl);
-    try {
-      await AuthModule.signIn();
-    } catch (err) {
-      errEl.textContent = `Sign-in failed: ${err.message}`;
-      showEl(errEl);
-      btn.disabled = false;
-    }
-  });
+const boot = () => {
+  Screens.show("screen-splash");
 
-  $("btn-logout").addEventListener("click",  () => { DailyReward.stopCountdown(); AuthModule.signOut(); });
-  $("btn-logout2").addEventListener("click", () => { DailyReward.stopCountdown(); AuthModule.signOut(); });
+  // Init modules
+  AuthScreen.init();
+  DashPage.bindTabs();
+  ProfilePage.init();
+  FruitGame.init();
+  LuckyGame.init();
 
-  // Hamburger toggle for game screen
-  const menuBtn  = $("game-menu-btn");
-  const menuDrop = $("game-menu-dropdown");
-  if (menuBtn && menuDrop) {
-    menuBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      cls.toggle(menuDrop, "hidden");
-    });
-    document.addEventListener("click", () => cls.add(menuDrop, "hidden"));
-  }
-
-  const enterGame = () => {
-    Router.goto("screen-game");
-    HistoryModule.load(State.user.uid);
-    LeaderboardModule.load();
-    DailyReward.updateUI();
-  };
-
-  // enterGame reloads history every time — covers both first visit and re-entry
-  $("btn-play-fruit").addEventListener("click", enterGame);
-
-    // ADD these two lines right after it:
-  $("btn-play-match").addEventListener("click", () => {
-    Router.goto("screen-match");
-    popMatch.mount();
-    // Keep nickname display in sync
-    $("match-nickname-display").textContent =
-      State.userData?.nickname || State.user?.email?.split("@")[0] || "";
-    $("match-credits").textContent = Math.floor(State.userData?.credits ?? 0);
-  });
-
-  $("btn-back-match").addEventListener("click", () => {
-    popMatch.unmount();
-    Router.goto("screen-dashboard");
-  });
-
-  $("btn-back").addEventListener("click", () => Router.goto("screen-dashboard"));
-
-  // Single listener — SpinModule.spin() handles all its own locking internally
-  $("btn-spin").addEventListener("click", SpinModule.spin);
-  LeaderboardModule.bindTabs();
-
-  // Shop button
-  $("pm-shop-btn")?.addEventListener("click", () => ShopModule.open());
-  $("pm-shop-close")?.addEventListener("click", () => ShopModule.close());
-
-  // Shop tabs
-  $("pm-shop-tab-color")?.addEventListener("click", () => ShopModule.switchShopTab("color"));
-  $("pm-shop-tab-emoji")?.addEventListener("click", () => ShopModule.switchShopTab("emoji"));
-  $("pm-shop-close-btn")?.addEventListener("click", () => ShopModule.close());
-
-};
-
-// ═══════════════════════════════════════════════════
-// SESSION HANDLERS
-// ═══════════════════════════════════════════════════
-
-const onUserSignedIn = async (user) => {
-  State.user     = user;
-  State.userData = await DB.ensureUser(user.uid, user.email);
-
-  $("hdr-email").textContent  = user.email;
-  $("game-email").textContent = user.email;
-
-  const avatar = $("hdr-avatar");
-  if (user.photoURL) {
-    avatar.src           = user.photoURL;
-    avatar.style.display = "block";
-  } else {
-    avatar.style.display = "none";
-  }
-
-  CreditsModule.setDisplay(State.userData.credits);
-  NicknameModule.init(State.userData.nickname || "");
-  GridModule.render();
-  Router.goto("screen-dashboard");
-  DailyReward.updateUI();
-  // Pre-warm leaderboard so it's ready when user enters the game
-  LeaderboardModule.load();
-};
-
-const onUserSignedOut = () => {
-  DailyReward.stopCountdown();
-  State.user     = null;
-  State.userData = null;
-  Router.goto("screen-auth");
-};
-
-// ═══════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════
-
-const init = () => {
-  bindEvents();
+  // Firebase auth listener
   onAuthStateChanged(auth, (user) => {
-    if (user) onUserSignedIn(user);
-    else      onUserSignedOut();
+    if (user) {
+      Auth.onSignedIn(user);
+    } else {
+      if (cls.has($("screen-splash"), "active")) {
+        setTimeout(() => {
+          Screens.splashOut(() => Screens.show("screen-signin"));
+        }, 1700);
+      } else {
+        Auth.onSignedOut();
+      }
+    }
   });
 };
 
-init();
+boot();
