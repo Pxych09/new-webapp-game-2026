@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -268,13 +269,13 @@
             <div class="gsc-badge fruit-badge"><i class="bi bi-play-fill"></i> PLAY</div>
             <h3 class="gsc-name fruit-name">FRUIT SPIN</h3>
             <p class="gsc-desc">Spin the border grid. Land on a fruit to collect coins. Watch out for the bomb — it cancels your reward.</p>
-            <div class="gsc-cost fruit-cost"><i class="bi bi-coin"></i> 5 coins per spin</div>
+            <div class="gsc-cost fruit-cost"><i class="bi bi-coin"></i> 1 coin per spin</div>
           </div>
           <div class="game-select-card lucky-card" id="open-lucky">
             <div class="gsc-badge lucky-badge"><i class="bi bi-play-fill"></i> PLAY</div>
             <h3 class="gsc-name lucky-name">LUCKY 777</h3>
             <p class="gsc-desc">Classic 3-reel slot machine. Match symbols across all three reels to win — hit triple 7s for the jackpot!</p>
-            <div class="gsc-cost lucky-cost"><i class="bi bi-coin"></i> 10 coins per pull</div>
+            <div class="gsc-cost lucky-cost"><i class="bi bi-coin"></i> 3 coins per pull</div>
           </div>
           <div class="game-select-card capture-card" id="open-capture">
             <div class="gsc-badge capture"><i class="bi bi-play-fill"></i> PLAY</div>
@@ -282,7 +283,7 @@
             <p class="gsc-desc">Two tiers of catching action across all Generations! Catch common Pokémon daily (Tier 1) or hunt Legendaries & Epics weekly (Tier 2).</p>
             <div class="gsc-cost-row">
               <div class="gsc-cost capture-cost"><i class="bi bi-gift-fill"></i> T1: 1 free daily · from 50 coins</div>
-              <div class="gsc-cost capture-cost-legend"><i class="bi bi-gem-fill"></i> T2: 1 free weekly · from 150 coins</div>
+              <div class="gsc-cost capture-cost-legend"><i class="bi bi-gem"></i> T2: 1 free weekly · from 150 coins</div>
             </div>
           </div>
         </div>
@@ -313,7 +314,7 @@
       <div class="fruit-legend" aria-label="Symbol values">
         <span>🍒 = 1</span><span>🥭 = 3</span><span>🍎 = 5</span><span>🍍 = 10</span><span>🍫 = 100</span><span>💣 = miss</span>
       </div>
-      <p class="spin-cost-note"><i class="bi bi-coin"></i> Each spin costs <strong>5 coins</strong></p>
+      <p class="spin-cost-note"><i class="bi bi-coin"></i> Each spin costs <strong>1 coin</strong></p>
       <button id="btn-fruit-spin" class="btn-spin-fruit"><i class="bi bi-arrow-clockwise"></i> SPIN</button>
       <div class="fruit-history-wrap">
         <h4 class="hist-title"><i class="bi bi-clock-history"></i> Recent Spins</h4>
@@ -357,7 +358,7 @@
         <div class="pt-row" role="row"><span role="cell">🔔🔔🔔</span><span role="cell">Bells</span><span class="pt-val" role="cell"><i class="bi bi-coin"></i> 20</span></div>
         <div class="pt-row mixed" role="row"><span role="cell">Any 2 match</span><span role="cell">Partial match</span><span class="pt-val" role="cell"><i class="bi bi-coin"></i> 5</span></div>
       </div>
-      <p class="spin-cost-note"><i class="bi bi-coin"></i> Each pull costs <strong>10 coins</strong></p>
+      <p class="spin-cost-note"><i class="bi bi-coin"></i> Each pull costs <strong>3 coins</strong></p>
       <button id="btn-lucky-pull" class="btn-spin-lucky"><i class="bi bi-stars"></i> PULL</button>
       <div class="fruit-history-wrap">
         <h4 class="hist-title"><i class="bi bi-clock-history"></i> Recent Pulls</h4>
@@ -378,7 +379,12 @@
         <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png" alt="" class="topbar-ball-icon" aria-hidden="true" />
         CAPTURE A POKÉMON
       </span>
-      <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="capture-coins-display" class="coin-val">0</span></div>
+      <div class="capture-topbar-right">
+        <button id="btn-capture-howto" class="btn-capture-info" aria-label="How to play">
+          <i class="bi bi-question-circle-fill"></i>
+        </button>
+        <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="capture-coins-display" class="coin-val">0</span></div>
+      </div>
     </div>
 
     <!-- Tier switcher tabs -->
@@ -389,7 +395,7 @@
         <span class="tier-tab-sub">Common · Daily</span>
       </button>
       <button class="capture-tier-tab" data-tier="t2">
-        <i class="bi bi-gem-fill"></i>
+        <i class="bi bi-gem"></i>
         <span class="tier-tab-label">TIER 2</span>
         <span class="tier-tab-sub">Legendary · Weekly</span>
       </button>
@@ -419,31 +425,75 @@
         </button>
       </div>
 
-      <!-- How to play -->
-      <div class="capture-howto">
-        <h4 class="hist-title"><i class="bi bi-question-circle"></i> HOW TO PLAY</h4>
-        <ul class="capture-rules">
-          <li>
-            <i class="bi bi-collection-fill" style="color:var(--poke-red)"></i>
-            <div><strong>Tier 1 — Common:</strong> 1 free throw every 24 h. Extra throws start at <strong>50 coins</strong>, increasing by 50 each time (resets daily).</div>
-          </li>
-          <li>
-            <i class="bi bi-gem-fill" style="color:var(--gold)"></i>
-            <div><strong>Tier 2 — Legendary:</strong> 1 free throw every 7 days. Extra throws start at <strong>150 coins</strong>, increasing by 50 each time (resets weekly).</div>
-          </li>
-          <li>
-            <i class="bi bi-cursor-fill" style="color:var(--cyan)"></i>
-            <div>Pick any of the <strong>5 Pokéballs</strong> to reveal a random Pokémon from the pool.</div>
-          </li>
-          <li>
-            <i class="bi bi-collection-fill" style="color:var(--gold)"></i>
-            <div>All captured Pokémon are saved to your <strong>Profile Collection</strong>.</div>
-          </li>
-        </ul>
-      </div>
-
     </div>
   </div><!-- /overlay-capture -->
+
+  <!-- ═══════════════════════════════════════════════
+       CAPTURE HOW TO PLAY MODAL
+  ═══════════════════════════════════════════════ -->
+  <div id="capture-howto-modal" class="capture-modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="How to play Capture a Pokémon">
+    <div class="capture-modal">
+      <div class="capture-modal-header">
+        <div class="capture-modal-title-wrap">
+          <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png" alt="" class="capture-modal-ball" aria-hidden="true" />
+          <div>
+            <h3 class="capture-modal-title">HOW TO PLAY</h3>
+            <p class="capture-modal-subtitle">Capture a Pokémon</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="capture-modal-body">
+
+        <div class="howto-rule">
+          <div class="howto-rule-icon tier1-icon">
+            <i class="bi bi-collection-fill"></i>
+          </div>
+          <div class="howto-rule-content">
+            <span class="howto-rule-label">TIER 1 — COMMON</span>
+            <p>One free throw every <strong>24 hours</strong>. Extra throws start at <strong>50 coins</strong> and increase by 50 each time — resets daily.</p>
+          </div>
+        </div>
+
+        <div class="howto-rule">
+          <div class="howto-rule-icon tier2-icon">
+            <i class="bi bi-gem"></i>
+          </div>
+          <div class="howto-rule-content">
+            <span class="howto-rule-label">TIER 2 — LEGENDARY</span>
+            <p>One free throw every <strong>7 days</strong>. Extra throws start at <strong>150 coins</strong> and increase by 50 each time — resets weekly.</p>
+          </div>
+        </div>
+
+        <div class="howto-rule">
+          <div class="howto-rule-icon ball-icon">
+            <i class="bi bi-cursor-fill"></i>
+          </div>
+          <div class="howto-rule-content">
+            <span class="howto-rule-label">PICK YOUR BALL</span>
+            <p>Choose any of the <strong>5 Pokéballs</strong> — each one hides a random Pokémon from the pool.</p>
+          </div>
+        </div>
+
+        <div class="howto-rule">
+          <div class="howto-rule-icon collect-icon">
+            <i class="bi bi-award-fill"></i>
+          </div>
+          <div class="howto-rule-content">
+            <span class="howto-rule-label">BUILD YOUR COLLECTION</span>
+            <p>Every caught Pokémon is saved to your <strong>Profile</strong>. Legendaries get a special gold badge!</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="capture-modal-footer">
+        <button id="btn-howto-close" class="btn-howto-close">
+          <i class="bi bi-check2-circle"></i> GOT IT, LET'S CATCH!
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script type="module" src="app.js"></script>
