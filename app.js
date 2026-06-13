@@ -1,36 +1,9 @@
+
 /**
  * ARCADE 2026 — app.js
  * Firebase: Username/Password Auth + Firestore
  * Games: Fruit Spin, Lucky 777, Capture a Pokémon (Tier 1 & Tier 2)
  */
-
-// ═══════════════════════════════════════════════════
-//  FIREBASE RULES (update in console)
-// ═══════════════════════════════════════════════════
-/**
- * rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read: if request.auth != null;
-    }
-    match /usernames/{username} {
-      allow read: if true;
-      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if false;
-    }
-    match /spins/{spinId} {
-      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
-      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
-    }
-    match /captures/{captureId} {
-      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
-      allow read: if request.auth != null;
-    }
-  }
-}
-*/
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
@@ -57,9 +30,9 @@ const FIREBASE_CONFIG = {
 // ═══════════════════════════════════════════════════
 //  CONSTANTS — GENERAL
 // ═══════════════════════════════════════════════════
-const POKE_COUNT    = 151;   // avatar picker still uses Gen 1 only
+const POKE_COUNT    = 151;
 const POKE_PER_PAGE = 6;
-const POKE_MAX      = 1025;  // highest Pokémon ID (Gen 9, Scarlet/Violet DLC)
+const POKE_MAX      = 1025;
 
 const POKE_SPRITE_URL  = (id) =>
   `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
@@ -84,12 +57,12 @@ const FRUIT_FIXED_BORDER = {
   20:"🍒", 21:"🥭", 22:"🍫", 23:"🥭", 24:"🍒",
 };
 
-const FRUIT_SPIN_COST = 5;
+const FRUIT_SPIN_COST = 1;
 const FRUIT_SPIN_MS   = 4000;
 const FRUIT_TICK_MS   = 65;
 
 const LUCKY_SYMBOLS   = ["7️⃣","💎","⭐","🍒","🍋","🔔","🍇","🍀"];
-const LUCKY_PULL_COST = 10;
+const LUCKY_PULL_COST = 3;
 const LUCKY_PAYOUTS   = {
   "7️⃣-7️⃣-7️⃣": 500,
   "💎-💎-💎":    200,
@@ -109,13 +82,11 @@ const MS_PER_WEEK    = 7 * MS_PER_DAY;
 // ═══════════════════════════════════════════════════
 const CAPTURE_BALL_COUNT = 5;
 
-// Tier 1 (common) — daily free + incremental paid
-const CAPTURE_T1_BASE_COST = 50;   // first paid attempt costs 50
-const CAPTURE_T1_INCREMENT = 50;   // each subsequent attempt +50 more
+const CAPTURE_T1_BASE_COST = 50;
+const CAPTURE_T1_INCREMENT = 50;
 
-// Tier 2 (legendary/epic) — weekly free + incremental paid
-const CAPTURE_T2_BASE_COST = 150;  // first paid attempt costs 150
-const CAPTURE_T2_INCREMENT = 50;   // each subsequent attempt +50 more
+const CAPTURE_T2_BASE_COST = 150;
+const CAPTURE_T2_INCREMENT = 50;
 
 // ═══════════════════════════════════════════════════
 //  POKÉMON DATA — Names (Gen 1 for avatar picker)
@@ -143,32 +114,18 @@ const POKE_NAMES = [
 // ═══════════════════════════════════════════════════
 //  POKÉMON POOLS — Tier 1 (common) & Tier 2 (legendary/epic)
 // ═══════════════════════════════════════════════════
-
-// All legendary, mythical, and pseudo-legendary Pokémon IDs (Gen 1–9)
-// These form TIER 2. Everything else (1–1025) is TIER 1.
 const TIER2_IDS = new Set([
-  // ── Gen 1 legendaries & pseudo ──
   144, 145, 146, 149, 150, 151,
-  // ── Gen 2 legendaries, mythicals & pseudo ──
   243, 244, 245, 248, 249, 250, 251,
-  // ── Gen 3 legendaries, mythicals & pseudo ──
   373, 376, 377, 378, 379, 380, 381, 382, 383, 384, 385, 386,
-  // ── Gen 4 legendaries, mythicals & pseudo ──
   445, 480, 481, 482, 483, 484, 485, 486, 487, 488, 489, 490, 491, 492, 493,
-  // ── Gen 5 legendaries, mythicals & pseudo ──
   635, 638, 639, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649,
-  // ── Gen 6 legendaries, mythicals & pseudo ──
   706, 716, 717, 718, 719, 720, 721,
-  // ── Gen 7 legendaries, mythicals & pseudo ──
   772, 773, 784, 785, 786, 787, 788, 789, 790, 791, 792, 800, 801, 802, 807, 808, 809,
-  // ── Gen 8 legendaries, mythicals & pseudo ──
   887, 888, 889, 890, 891, 892, 893, 894, 895, 896, 897, 898, 905,
-  // ── Gen 9 legendaries, mythicals & pseudo ──
   998, 1001, 1002, 1003, 1004, 1007, 1008, 1009, 1010, 1017, 1019, 1020, 1021, 1024, 1025,
 ]);
 
-// Build pools: IDs 1–1025 that are valid (exist in PokéAPI)
-// Some IDs in 906-1025 range have gaps for forms; we include only confirmed base IDs
 const VALID_GEN9_IDS = [
   906,907,908,909,910,911,912,913,914,915,916,917,918,919,920,
   921,922,923,924,925,926,927,928,929,930,931,932,933,934,935,
@@ -180,7 +137,6 @@ const VALID_GEN9_IDS = [
   1009,1010,1017,1019,1020,1021,1022,1023,1024,1025,
 ];
 
-// All valid IDs across Gen 1-9
 const ALL_VALID_IDS = [
   ...Array.from({ length: 905 }, (_, i) => i + 1),
   ...VALID_GEN9_IDS,
@@ -189,14 +145,11 @@ const ALL_VALID_IDS = [
 const TIER1_POOL = ALL_VALID_IDS.filter(id => !TIER2_IDS.has(id));
 const TIER2_POOL = ALL_VALID_IDS.filter(id =>  TIER2_IDS.has(id));
 
-// Resolve Pokémon name: use POKE_NAMES for Gen 1, fallback for others
 const pokeName = (id) => {
   if (id <= 151 && POKE_NAMES[id]) {
     const n = POKE_NAMES[id];
     return n.charAt(0).toUpperCase() + n.slice(1).replace(/-/g, " ");
   }
-  // For Gen 2+, we'll get the name from PokéAPI species fetch
-  // Return a placeholder that gets overridden in _fetchSpeciesData
   return `Pokémon #${id}`;
 };
 
@@ -366,13 +319,10 @@ const DB = {
       totalCaptures:        0,
       bestWin:              0,
       pokemonCollection:    [],
-      // Tier 1 capture state (daily)
       captureT1LastClaimAt: null,
       captureT1PaidCount:   0,
-      // Tier 2 capture state (weekly)
       captureT2LastClaimAt: null,
       captureT2PaidCount:   0,
-      // Legacy (kept for DB compat)
       captureLastClaimAt:   null,
       captureUsed:          false,
       lastClaimAt:          null,
@@ -1034,7 +984,7 @@ const LuckyGame = {
 //  CAPTURE A POKÉMON — TWO-TIER SYSTEM
 // ═══════════════════════════════════════════════════
 const CaptureGame = {
-  _tier:          "t1",   // "t1" | "t2"
+  _tier:          "t1",
   _pickedBall:    null,
   _revealedPoke:  null,
   _wasFreeThrow:  false,
@@ -1050,7 +1000,6 @@ const CaptureGame = {
 
   _lastClaim() { return toDate(State.userData?.[this._lastClaimKey()]); },
   _paidCount() {
-    // Reset paid count if outside the window
     const last = this._lastClaim();
     if (!last || Date.now() - last.getTime() >= this._window()) return 0;
     return State.userData?.[this._paidCountKey()] ?? 0;
@@ -1060,7 +1009,7 @@ const CaptureGame = {
     return !l || Date.now() - l.getTime() >= this._window();
   },
   _nextPaidCost() {
-    const n = this._paidCount(); // how many paid throws already used this period
+    const n = this._paidCount();
     return this._basePrice() + n * this._increment();
   },
   _msUntilReset() {
@@ -1074,6 +1023,12 @@ const CaptureGame = {
     $("open-capture")?.addEventListener("click",        () => this.open());
     $("back-capture")?.addEventListener("click",        () => this._closeOverlay());
     $("btn-capture-again")?.addEventListener("click",   () => this._resetForNewThrow());
+    // How to Play modal
+    $("btn-capture-howto")?.addEventListener("click",   () => this._showHowToModal());
+    $("btn-howto-close")?.addEventListener("click",     () => this._closeHowToModal());
+    $("capture-howto-modal")?.addEventListener("click", (e) => {
+      if (e.target.id === "capture-howto-modal") this._closeHowToModal();
+    });
     // Tier tab listeners
     document.querySelectorAll(".capture-tier-tab").forEach(btn => {
       btn.addEventListener("click", () => this._switchTier(btn.dataset.tier));
@@ -1092,10 +1047,18 @@ const CaptureGame = {
     this._refreshCoins();
     this._renderTierTabs();
     this._renderState();
+    // Always show How to Play when entering the game
+    this._showHowToModal();
   },
 
   _closeOverlay() {
     cls.add($("overlay-capture"), "hidden");
+    // Also close modal if open
+    const modal = $("capture-howto-modal");
+    if (modal && cls.has(modal, "visible")) {
+      cls.remove(modal, "visible");
+      cls.add(modal, "hidden");
+    }
     this._pickedBall   = null;
     this._revealedPoke = null;
     this._wasFreeThrow = false;
@@ -1123,9 +1086,29 @@ const CaptureGame = {
     document.querySelectorAll(".capture-tier-tab").forEach(btn => {
       cls.toggle(btn, "active", btn.dataset.tier === this._tier);
     });
-    // Update overlay accent class for tier 2 gold theme
     const overlay = $("overlay-capture");
     if (overlay) cls.toggle(overlay, "tier2-active", this._tier === "t2");
+  },
+
+  // ── How to Play Modal ─────────────────────────────
+
+  _showHowToModal() {
+    const modal = $("capture-howto-modal");
+    if (!modal) return;
+    cls.remove(modal, "hidden");
+    // Small delay so transition fires after display:flex kicks in
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => cls.add(modal, "visible"));
+    });
+  },
+
+  _closeHowToModal() {
+    const modal = $("capture-howto-modal");
+    if (!modal) return;
+    cls.remove(modal, "visible");
+    modal.addEventListener("transitionend", () => {
+      if (!cls.has(modal, "visible")) cls.add(modal, "hidden");
+    }, { once: true });
   },
 
   // ── State rendering ───────────────────────────────
@@ -1140,7 +1123,6 @@ const CaptureGame = {
     if (revealEl) cls.add(revealEl, "hidden");
 
     if (canFree) {
-      // Free throw available
       if (statusEl) statusEl.innerHTML = this._tier === "t1"
         ? `<span class="capture-status-badge free"><i class="bi bi-gift-fill"></i> FREE DAILY BALL READY</span>
            <p class="capture-status-sub">Pick one of the 5 Pokéballs to catch a Pokémon!</p>`
@@ -1149,10 +1131,8 @@ const CaptureGame = {
       if (ballsWrap) { cls.remove(ballsWrap, "hidden"); this._renderBalls(true); }
       if (buyWrap)   cls.add(buyWrap, "hidden");
     } else {
-      // No free throw — show cost of next paid attempt
       const nextCost = this._nextPaidCost();
       const msLeft   = this._msUntilReset();
-      const resetLabel = this._tier === "t1" ? "daily" : "weekly";
 
       if (statusEl) statusEl.innerHTML = this._tier === "t1"
         ? `<span class="capture-status-badge used"><i class="bi bi-check-circle-fill"></i> TODAY'S FREE THROW USED</span>
@@ -1163,7 +1143,6 @@ const CaptureGame = {
       if (ballsWrap) cls.add(ballsWrap, "hidden");
       if (buyWrap)   cls.remove(buyWrap, "hidden");
 
-      // Update buy button with correct cost
       this._updateBuyButton(nextCost);
     }
   },
@@ -1253,7 +1232,6 @@ const CaptureGame = {
       const flavorText = entry
         ? entry.flavor_text.replace(/\f|\n/g," ").replace(/\s+/g," ").trim()
         : "A mysterious Pokémon with unknown abilities.";
-      // Resolve proper name from species
       const name = data.name
         ? data.name.charAt(0).toUpperCase() + data.name.slice(1).replace(/-/g," ")
         : pokeName(id);
@@ -1332,7 +1310,6 @@ const CaptureGame = {
     const newCaptures = (State.userData.totalCaptures || 0) + 1;
     const paidCount   = this._paidCount();
 
-    // Fields to update
     const fields = {
       pokemonCollection:    newCollection,
       totalCaptures:        newCaptures,
@@ -1340,10 +1317,8 @@ const CaptureGame = {
     };
 
     if (!this._wasFreeThrow) {
-      // Increment paid count (used within this window)
       fields[this._paidCountKey()] = paidCount + 1;
     } else {
-      // Free throw — reset paid count for this window
       fields[this._paidCountKey()] = 0;
     }
 
@@ -1385,12 +1360,10 @@ const CaptureGame = {
       return;
     }
 
-    // Mark as purchased (not free) so _onBallPick tracks correctly
     this._wasFreeThrow = false;
     this._refreshCoins();
     Toast.show("Pokéball purchased! Pick one to throw.", "info", 2000);
 
-    // Show balls for picking
     const ballsWrap = $("pokeballs-wrap");
     const buyWrap   = $("capture-buy-wrap");
     if (ballsWrap) { cls.remove(ballsWrap, "hidden"); this._renderBalls(true); }
@@ -1472,7 +1445,6 @@ const Auth = {
       const username = user.email.replace("@arcade2026.local","");
       State.userData = await DB.createUser(user.uid, username);
     }
-    // Migrate old users who don't have T1/T2 fields yet
     if (State.userData.captureT1LastClaimAt === undefined) {
       const migrate = {
         captureT1LastClaimAt: State.userData.captureLastClaimAt || null,
@@ -1499,6 +1471,9 @@ const Auth = {
     cls.add($("overlay-fruit"),   "hidden");
     cls.add($("overlay-lucky"),   "hidden");
     cls.add($("overlay-capture"), "hidden");
+    // Also hide modal
+    const modal = $("capture-howto-modal");
+    if (modal) { cls.remove(modal, "visible"); cls.add(modal, "hidden"); }
     cls.add($("app"), "hidden");
     Screens.show("screen-signin");
     ["login-username","login-password","signup-username","signup-password","signup-password-confirm"]
