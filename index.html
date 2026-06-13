@@ -167,7 +167,7 @@
               <div class="hgc-icon">🔴</div>
               <div class="hgc-info">
                 <span class="hgc-name">CAPTURE A POKÉMON</span>
-                <span class="hgc-desc">Pick a Pokéball, reveal a Pokémon &amp; grow your collection</span>
+                <span class="hgc-desc">Two tiers: catch common Pokémon daily or legendary ones weekly</span>
               </div>
               <i class="bi bi-chevron-right hgc-arrow"></i>
             </div>
@@ -178,7 +178,6 @@
       <!-- ═══ DASHBOARD ═══ -->
       <div id="page-dashboard" class="page">
         <h2 class="page-title"><i class="bi bi-bar-chart-fill"></i> DASHBOARD</h2>
-
         <section class="dash-stats">
           <h3 class="section-label"><i class="bi bi-graph-up-arrow"></i> YOUR STATS</h3>
           <div class="stat-grid">
@@ -189,8 +188,6 @@
             <div class="stat-card"><i class="bi bi-trophy-fill stat-icon"></i><span class="stat-val" id="stat-best-win">0</span><span class="stat-lbl">Best Win</span></div>
           </div>
         </section>
-
-        <!-- Pokémon Candidates — recent captures across all players -->
         <section class="dash-pokemon-candidates">
           <h3 class="section-label"><i class="bi bi-award-fill" style="color:var(--poke-red)"></i> LATEST CAPTURED POKÉMON</h3>
           <p class="candidates-subtitle">Recent catches from all trainers</p>
@@ -198,12 +195,10 @@
             <div class="candidates-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div>
           </div>
         </section>
-
         <section class="dash-leaderboard">
           <h3 class="section-label"><i class="bi bi-trophy"></i> LEADERBOARD</h3>
           <div id="leaderboard-list" class="lb-list"><div class="lb-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div></div>
         </section>
-
         <section class="dash-activity">
           <h3 class="section-label"><i class="bi bi-clock-history"></i> RECENT ACTIVITY</h3>
           <div class="activity-tabs">
@@ -217,7 +212,6 @@
       <!-- ═══ PROFILE ═══ -->
       <div id="page-profile" class="page">
         <h2 class="page-title"><i class="bi bi-person-circle"></i> PROFILE</h2>
-
         <section class="profile-section">
           <h3 class="section-label"><i class="bi bi-emoji-smile"></i> AVATAR</h3>
           <div class="avatar-display">
@@ -232,18 +226,12 @@
               <div class="pokemon-loading"><i class="bi bi-arrow-repeat"></i> Loading Pokémon…</div>
             </div>
             <div class="pokemon-pagination">
-              <button id="btn-pokemon-prev" class="btn-pokemon-nav" disabled>
-                <i class="bi bi-chevron-left"></i> Prev
-              </button>
+              <button id="btn-pokemon-prev" class="btn-pokemon-nav" disabled><i class="bi bi-chevron-left"></i> Prev</button>
               <span id="pokemon-page-label" class="pokemon-page-label">Page 1</span>
-              <button id="btn-pokemon-next" class="btn-pokemon-nav">
-                Next <i class="bi bi-chevron-right"></i>
-              </button>
+              <button id="btn-pokemon-next" class="btn-pokemon-nav">Next <i class="bi bi-chevron-right"></i></button>
             </div>
           </div>
         </section>
-
-        <!-- Pokémon Collection Gallery -->
         <section class="profile-section">
           <h3 class="section-label">
             <i class="bi bi-collection-fill" style="color:var(--poke-red)"></i> POKÉMON COLLECTION
@@ -257,7 +245,6 @@
             </div>
           </div>
         </section>
-
         <section class="profile-section">
           <h3 class="section-label"><i class="bi bi-person-vcard"></i> ACCOUNT</h3>
           <div class="account-info">
@@ -277,30 +264,27 @@
       <div id="page-games" class="page">
         <h2 class="page-title"><i class="bi bi-joystick"></i> GAMES</h2>
         <div class="games-grid">
-
-          <!-- Fruit Spin -->
           <div class="game-select-card fruit-card" id="open-fruit">
             <div class="gsc-badge fruit-badge"><i class="bi bi-play-fill"></i> PLAY</div>
             <h3 class="gsc-name fruit-name">FRUIT SPIN</h3>
             <p class="gsc-desc">Spin the border grid. Land on a fruit to collect coins. Watch out for the bomb — it cancels your reward.</p>
             <div class="gsc-cost fruit-cost"><i class="bi bi-coin"></i> 5 coins per spin</div>
           </div>
-
-          <!-- Lucky 777 -->
           <div class="game-select-card lucky-card" id="open-lucky">
             <div class="gsc-badge lucky-badge"><i class="bi bi-play-fill"></i> PLAY</div>
             <h3 class="gsc-name lucky-name">LUCKY 777</h3>
             <p class="gsc-desc">Classic 3-reel slot machine. Match symbols across all three reels to win — hit triple 7s for the jackpot!</p>
             <div class="gsc-cost lucky-cost"><i class="bi bi-coin"></i> 10 coins per pull</div>
           </div>
-
           <div class="game-select-card capture-card" id="open-capture">
             <div class="gsc-badge capture"><i class="bi bi-play-fill"></i> PLAY</div>
             <h3 class="gsc-name" style="color:var(--poke-red)">CAPTURE A POKÉMON</h3>
-            <p class="gsc-desc">Pick one of 5 Pokéballs to reveal and capture a random Gen 1 Pokémon. One free throw daily — buy more for 500 coins.</p>
-            <div class="gsc-cost capture-cost"><i class="bi bi-gift-fill"></i> 1 free daily · 500 coins extra</div>
+            <p class="gsc-desc">Two tiers of catching action across all Generations! Catch common Pokémon daily (Tier 1) or hunt Legendaries & Epics weekly (Tier 2).</p>
+            <div class="gsc-cost-row">
+              <div class="gsc-cost capture-cost"><i class="bi bi-gift-fill"></i> T1: 1 free daily · from 50 coins</div>
+              <div class="gsc-cost capture-cost-legend"><i class="bi bi-gem-fill"></i> T2: 1 free weekly · from 150 coins</div>
+            </div>
           </div>
-
         </div>
       </div><!-- /page-games -->
 
@@ -314,7 +298,7 @@
     </nav>
   </div><!-- /app -->
 
-  <!-- ══════════════════════════════════════════════
+  <!-- ═══════════════════════════════════════════════
        FRUIT SPIN OVERLAY
   ═══════════════════════════════════════════════ -->
   <div id="overlay-fruit" class="game-overlay hidden" role="dialog" aria-label="Fruit Spin game">
@@ -338,7 +322,7 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════
+  <!-- ═══════════════════════════════════════════════
        LUCKY 777 OVERLAY
   ═══════════════════════════════════════════════ -->
   <div id="overlay-lucky" class="game-overlay hidden" role="dialog" aria-label="Lucky 777 slot game">
@@ -382,10 +366,12 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════
-       CAPTURE A POKÉMON OVERLAY
+  <!-- ═══════════════════════════════════════════════
+       CAPTURE A POKÉMON OVERLAY  (Tier 1 & Tier 2)
   ═══════════════════════════════════════════════ -->
   <div id="overlay-capture" class="game-overlay hidden" role="dialog" aria-label="Capture a Pokémon game">
+
+    <!-- Top bar -->
     <div class="overlay-topbar capture-topbar">
       <button class="overlay-back" id="back-capture"><i class="bi bi-chevron-left"></i> Back</button>
       <span class="overlay-title capture-title">
@@ -393,6 +379,20 @@
         CAPTURE A POKÉMON
       </span>
       <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="capture-coins-display" class="coin-val">0</span></div>
+    </div>
+
+    <!-- Tier switcher tabs -->
+    <div class="capture-tier-tabs">
+      <button class="capture-tier-tab active" data-tier="t1">
+        <i class="bi bi-collection-fill"></i>
+        <span class="tier-tab-label">TIER 1</span>
+        <span class="tier-tab-sub">Common · Daily</span>
+      </button>
+      <button class="capture-tier-tab" data-tier="t2">
+        <i class="bi bi-gem-fill"></i>
+        <span class="tier-tab-label">TIER 2</span>
+        <span class="tier-tab-sub">Legendary · Weekly</span>
+      </button>
     </div>
 
     <div class="capture-game-body">
@@ -406,30 +406,14 @@
         <div id="pokeballs-grid" class="pokeballs-grid" role="group" aria-label="Choose a Pokéball"></div>
       </div>
 
-      <!-- Reveal panel (hidden until ball picked) -->
+      <!-- Reveal panel -->
       <div id="capture-reveal" class="capture-reveal hidden" role="status" aria-live="polite"></div>
 
-      <!-- Buy another pokeball CTA (shown when daily used) -->
-      <div id="capture-buy-wrap" class="capture-buy-wrap hidden">
-        <div class="capture-buy-card">
-          <img
-            src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png"
-            alt="Pokéball"
-            class="buy-ball-img"
-          />
-          <p class="buy-title">Want to catch more?</p>
-          <p class="buy-sub">Purchase a Pokéball to throw again and expand your collection.</p>
-          <button id="btn-buy-pokeball" class="btn-buy-pokeball">
-            <i class="bi bi-bag-fill"></i> BUY POKÉBALL — 500 coins
-          </button>
-        </div>
+      <!-- Buy / paid throw CTA -->
+      <div id="capture-buy-wrap" class="capture-buy-wrap hidden"></div>
 
-        <!-- Show last captured if any -->
-        <div id="capture-reveal" class="capture-reveal hidden" role="status" aria-live="polite"></div>
-      </div>
-
-      <!-- "Catch again" button — visible after reveal when ball was purchased -->
-      <div id="capture-again-wrap" class="hidden" style="text-align:center; margin-top: 16px;">
+      <!-- Throw again button -->
+      <div id="capture-again-wrap" class="hidden" style="text-align:center; margin-top:16px;">
         <button id="btn-capture-again" class="btn-capture-again">
           <i class="bi bi-arrow-counterclockwise"></i> THROW AGAIN
         </button>
@@ -439,10 +423,22 @@
       <div class="capture-howto">
         <h4 class="hist-title"><i class="bi bi-question-circle"></i> HOW TO PLAY</h4>
         <ul class="capture-rules">
-          <li><i class="bi bi-gift-fill" style="color:var(--poke-red)"></i> One <strong>free Pokéball</strong> every 24 hours</li>
-          <li><i class="bi bi-cursor-fill" style="color:var(--cyan)"></i> Pick any of the <strong>5 Pokéballs</strong> to reveal a random Gen 1 Pokémon</li>
-          <li><i class="bi bi-collection-fill" style="color:var(--gold)"></i> All captured Pokémon are saved to your <strong>Profile Collection</strong></li>
-          <li><i class="bi bi-bag-fill" style="color:var(--magenta)"></i> Want more? Buy an extra Pokéball for <strong>500 coins</strong></li>
+          <li>
+            <i class="bi bi-collection-fill" style="color:var(--poke-red)"></i>
+            <div><strong>Tier 1 — Common:</strong> 1 free throw every 24 h. Extra throws start at <strong>50 coins</strong>, increasing by 50 each time (resets daily).</div>
+          </li>
+          <li>
+            <i class="bi bi-gem-fill" style="color:var(--gold)"></i>
+            <div><strong>Tier 2 — Legendary:</strong> 1 free throw every 7 days. Extra throws start at <strong>150 coins</strong>, increasing by 50 each time (resets weekly).</div>
+          </li>
+          <li>
+            <i class="bi bi-cursor-fill" style="color:var(--cyan)"></i>
+            <div>Pick any of the <strong>5 Pokéballs</strong> to reveal a random Pokémon from the pool.</div>
+          </li>
+          <li>
+            <i class="bi bi-collection-fill" style="color:var(--gold)"></i>
+            <div>All captured Pokémon are saved to your <strong>Profile Collection</strong>.</div>
+          </li>
         </ul>
       </div>
 
