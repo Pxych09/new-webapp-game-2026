@@ -286,8 +286,17 @@
               <div class="gsc-cost capture-cost-legend"><i class="bi bi-gem"></i> T2: 1 free weekly · from 150 coins</div>
             </div>
           </div>
-        </div>
-      </div><!-- /page-games -->
+          
+          <!-- ── PÆIR A PÆRA card ── -->
+          <div class="game-select-card paer-card" id="open-paer">
+            <div class="gsc-badge paer-badge"><i class="bi bi-play-fill"></i> PLAY</div>
+            <h3 class="gsc-name paer-name">PÆIR A PÆRA</h3>
+            <p class="gsc-desc">Flip the 5×5 vault. Memorise the tiles, then hunt for diamonds, gold bags and cash before the 2-minute timer seals the vault.</p>
+            <div class="gsc-cost paer-cost"><i class="bi bi-coin"></i> 5 coins per run</div>
+          </div>
+          
+          </div>
+          </div><!-- /page-games -->
 
     </main>
 
@@ -495,7 +504,238 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- ═══════════════════════════════════════════════
+       PÆIR A PÆRA OVERLAY
+  ═══════════════════════════════════════════════ -->
+  <div id="overlay-paer" class="game-overlay hidden" role="dialog" aria-label="Pæir a Pæra treasure vault game">
+
+    <div class="overlay-topbar paer-topbar">
+      <button class="overlay-back" id="back-paer"><i class="bi bi-chevron-left"></i> Back</button>
+      <span class="overlay-title paer-title">💎 PÆIR A PÆRA</span>
+      <div class="paer-topbar-right">
+        <button id="btn-paer-howto" class="btn-paer-info" aria-label="How to play">
+          <i class="bi bi-question-circle-fill"></i>
+        </button>
+        <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="paer-coins-display" class="coin-val">0</span></div>
+      </div>
+    </div>
+
+    <div class="paer-game-body">
+
+      <!-- Bank bar -->
+      <div class="paer-bank-bar">
+        <div class="paer-bank-left">
+          <i class="bi bi-bank2"></i>
+          <span class="paer-bank-label">BANK</span>
+          <span class="paer-bank-val" id="paer-bank-display">₱0</span>
+        </div>
+        <div class="paer-bank-right" id="paer-cashout-hint"></div>
+      </div>
+<!-- Gift tray (collected gifts wait here) -->
+      <div id="paer-gift-tray" class="paer-gift-tray hidden" aria-label="Collected gifts"></div>
+
+      <!-- Power-up status bar -->
+      <div id="paer-power-bar" class="paer-power-bar hidden" aria-live="polite"></div>
+
+      <!-- Timer -->
+      <div id="paer-timer-wrap" class="paer-timer-wrap hidden">
+        <div id="paer-time-display" class="paer-time-display">02:00</div>
+        <div class="paer-timer-bar-track">
+          <div id="paer-timer-bar" class="paer-timer-bar"></div>
+        </div>
+      </div>
+
+      <!-- Status / phase banner -->
+      <div id="paer-status" class="paer-status" role="status" aria-live="polite"></div>
+
+      <!-- 5×5 Tile grid -->
+      <div id="paer-grid-wrap" class="paer-grid-wrap hidden">
+        <div id="paer-grid" class="paer-grid" role="group" aria-label="Vault tiles"></div>
+      </div>
+
+      <!-- Start button (idle state) -->
+      <div id="paer-start-wrap" class="paer-start-wrap">
+        <div class="paer-vault-art">
+          <span class="paer-vault-gem">💎</span>
+          <div class="paer-vault-rings"></div>
+        </div>
+        <div class="paer-prize-strip">
+          <div class="paer-prize-pill diamond"><span>💎</span><div><b>×2</b><small>₱1,000</small></div></div>
+          <div class="paer-prize-pill gold"><span>💰</span><div><b>×5</b><small>₱500</small></div></div>
+          <div class="paer-prize-pill cash"><span>💵</span><div><b>×9</b><small>₱100</small></div></div>
+          <div class="paer-prize-pill bomb"><span>💣</span><div><b>×9</b><small>−₱10</small></div></div>
+          <div class="paer-prize-pill fire"><span>🔥</span><div><b>W2+</b><small>−₱100</small></div></div>
+          <div class="paer-prize-pill gift"><span>🎁</span><div><b>1%</b><small>Coins!</small></div></div>
+          <div class="paer-prize-pill freeze"><span>❄️</span><div><b>W2+</b><small>+15s ❄️</small></div></div>
+          <div class="paer-prize-pill star"><span>⭐</span><div><b>W2+</b><small>×2 25s</small></div></div>
+          <div class="paer-prize-pill orb"><span>🧿</span><div><b>W2+</b><small>Peek 2s</small></div></div>
+          <div class="paer-prize-pill superstar"><span>🌟</span><div><b>W2+</b><small>×4 25s</small></div></div>
+        </div>
+        <button id="btn-paer-start" class="btn-paer-start">
+          <i class="bi bi-lightning-charge-fill"></i> ENTER VAULT — <i class="bi bi-coin"></i> 5
+        </button>
+      </div>
+
+      <!-- Cash-out accordion -->
+      <div class="paer-cashout-accordion" id="paer-cashout-accordion">
+        <button class="paer-cashout-toggle" id="btn-paer-cashout-toggle" aria-expanded="false">
+          <span class="pca-left"><i class="bi bi-bank2"></i> CASH OUT</span>
+          <span class="pca-right" id="pca-right-label">Convert bank → coins</span>
+          <i class="bi bi-chevron-down pca-chevron" id="pca-chevron"></i>
+        </button>
+        <div class="paer-cashout-body hidden" id="paer-cashout-body">
+          <p class="paer-cashout-desc">Every ₱5,000 in your bank converts to <strong>50 coins</strong>. Only full blocks convert — the remainder stays in your bank.</p>
+          <div id="paer-cashout-tiers" class="paer-cashout-tiers"></div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /overlay-paer -->
+
+  <!-- ═══════════════════════════════════════════════
+       PÆIR A PÆRA — HOW TO PLAY MODAL
+  ═══════════════════════════════════════════════ -->
+  <div id="paer-howto-modal" class="paer-modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="How to play Pæir a Pæra">
+    <div class="paer-modal">
+      <div class="paer-modal-header">
+        <div class="paer-modal-title-wrap">
+          <span class="paer-modal-gem">💎</span>
+          <div>
+            <h3 class="paer-modal-title">HOW TO PLAY</h3>
+            <p class="paer-modal-subtitle">Pæir a Pæra · Treasure Vault</p>
+          </div>
+        </div>
+      </div>
+      <div class="paer-modal-body">
+        <div class="paer-howto-rule">
+          <div class="paer-howto-icon cost-icon"><i class="bi bi-coin"></i></div>
+          <div class="paer-howto-content">
+            <span class="paer-howto-label">ENTRY COST</span>
+            <p>Each run costs <strong>5 coins</strong>. You start with a fresh 5×5 vault every time.</p>
+          </div>
+        </div>
+        <div class="paer-howto-rule">
+          <div class="paer-howto-icon eye-icon"><i class="bi bi-eye-fill"></i></div>
+          <div class="paer-howto-content">
+            <span class="paer-howto-label">MEMORISE PHASE</span>
+            <p>All 25 tiles reveal for <strong>200 ms</strong> — memorise the positions. Then they flip back and <strong>shuffle</strong>.</p>
+          </div>
+        </div>
+        <div class="paer-howto-rule">
+          <div class="paer-howto-icon timer-icon"><i class="bi bi-stopwatch-fill"></i></div>
+          <div class="paer-howto-content">
+            <span class="paer-howto-label">2-MINUTE CLOCK</span>
+            <p>Flip tiles before the vault seals. When time runs out all remaining tiles auto-reveal and your haul is totalled.</p>
+          </div>
+        </div>
+        <div class="paer-howto-rule">
+          <div class="paer-howto-icon prizes-icon"><i class="bi bi-trophy-fill"></i></div>
+          <div class="paer-howto-content">
+            <span class="paer-howto-label">PRIZES</span>
+            <p>💎 Diamond <strong>₱1,000</strong> · 💰 Gold Bag <strong>₱500</strong> · 💵 Cash <strong>₱100</strong> · 💣 Bomb <em>nothing</em> · 🔥 Fire <em>−₱500</em>. Earnings go to your Bank.</p>
+          </div>
+        </div>
+        <div class="paer-howto-rule">
+          <div class="paer-howto-icon prizes-icon"><i class="bi bi-trophy-fill"></i></div>
+          <div class="paer-howto-content">
+            <span class="paer-howto-label">PRIZES & HAZARDS</span>
+            <p>💎 <strong>₱1,000</strong> · 💰 <strong>₱500</strong> · 💵 <strong>₱100</strong> · 💣 <em>−₱10</em> · 🔥 <em>−₱100</em>. All earnings go to your Bank.</p>
+          </div>
+        </div>
+     <div class="paer-howto-rule">
+  <div class="paer-howto-icon freeze-icon"><span style="font-size:1.1rem">❄️</span></div>
+  <div class="paer-howto-content">
+    <span class="paer-howto-label">FREEZE ❄️</span>
+    <p>Pauses the countdown by <strong>15 seconds</strong> and makes you <strong>immune to 💣 and 🔥</strong> while active. Stacks additively.</p>
+  </div>
+</div>
+<div class="paer-howto-rule">
+  <div class="paer-howto-icon star-icon"><span style="font-size:1.1rem">⭐</span></div>
+  <div class="paer-howto-content">
+    <span class="paer-howto-label">STAR ⭐</span>
+    <p>Doubles all money earned for <strong>25 seconds</strong>. Getting another ⭐ while active adds 25 more seconds — duration stacks, multiplier never drops.</p>
+  </div>
+</div>
+<div class="paer-howto-rule">
+  <div class="paer-howto-icon superstar-icon"><span style="font-size:1.1rem">🌟</span></div>
+  <div class="paer-howto-content">
+    <span class="paer-howto-label">SUPERSTAR 🌟</span>
+    <p>Rare upgrade — <strong>4× money</strong> for <strong>25 seconds</strong>. If ⭐ is already active, the multiplier upgrades to ×4 and duration stacks.</p>
+  </div>
+</div>
+        <div class="paer-howto-rule">
+          <div class="paer-howto-icon orb-icon"><span style="font-size:1.1rem">🧿</span></div>
+          <div class="paer-howto-content">
+            <span class="paer-howto-label">ORB 🧿</span>
+            <p>Briefly reveals all hidden tiles for <strong>2 seconds</strong> so you can memorise the board before they flip back.</p>
+          </div>
+        </div>
+        <div class="paer-howto-rule">
+          <div class="paer-howto-icon gift-icon"><i class="bi bi-gift-fill"></i></div>
+          <div class="paer-howto-content">
+            <span class="paer-howto-label">MYSTERY GIFT 🎁</span>
+            <p>Extremely rare (1% per wave). Floats to your <strong>Gift Tray</strong> — tap it <em>after</em> the vault seals for <strong>100–500 coins</strong>.</p>
+          </div>
+        </div>
+        <div class="paer-howto-rule">
+          <div class="paer-howto-icon bank-icon"><i class="bi bi-bank2"></i></div>
+          <div class="paer-howto-content">
+            <span class="paer-howto-label">BANK → COINS</span>
+            <p>Every <strong>₱5,000</strong> in your bank converts to <strong>50 coins</strong>. Cash out any time from the accordion below the board.</p>
+          </div>
+        </div>
+      </div>
+      <div class="paer-modal-footer">
+        <button id="btn-paer-howto-close" class="btn-paer-howto-close">
+          <i class="bi bi-lightning-charge-fill"></i> GOT IT — OPEN THE VAULT!
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       PÆIR A PÆRA — RESULT MODAL
+  ═══════════════════════════════════════════════ -->
+<div id="paer-result-modal" class="paer-modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Vault result">
+  <div class="paer-modal paer-result-modal-inner">
+    <div class="paer-modal-header prm-header">
+      <button class="prm-close-btn" id="btn-prm-close" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+      <div style="text-align:center; flex:1;">
+        <div class="prm-vault-icon">⏱️</div>
+        <h3 class="paer-modal-title" style="justify-content:center;">VAULT SEALED</h3>
+        <p class="paer-modal-subtitle" id="prm-wave">Wave 1</p>
+      </div>
+    </div>
+    
+    <div class="paer-modal-body prm-body">
+      <!-- Bank total -->
+      <div class="prm-bank-card">
+        <p class="prm-label">TOTAL BANK</p>
+        <p class="prm-bank-val" id="prm-bank">₱0</p>
+      </div>
+      
+      <!-- Gift note -->
+      <div id="prm-gift-note" class="prm-gift-note"></div>
+      
+      <!-- Cashout reminder -->
+      <div class="prm-hint">
+        <i class="bi bi-info-circle"></i>
+        Close this and use the <strong>CASH OUT</strong> accordion below the board to convert your bank to coins.
+      </div>
+    </div>
+    
+    <div class="paer-modal-footer prm-footer">
+      <button id="btn-prm-again" class="btn-paer-howto-close prm-again-btn">
+        <i class="bi bi-arrow-counterclockwise"></i> PLAY AGAIN
+      </button>
+      <button id="btn-prm-close-bottom" class="btn-prm-close-bottom">
+        <i class="bi bi-x-circle"></i> CLOSE & CASH OUT
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
