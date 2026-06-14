@@ -94,19 +94,25 @@
   <div id="app" class="hidden">
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-    <header class="topbar">
-      <div class="topbar-brand">
-        <img src="https://cdn-icons-png.flaticon.com/512/706/706023.png" alt="Arcade Logo" class="topbar-logo-img" />
-        <div>
-          <span class="topbar-title">ARCADE</span>
-          <span class="topbar-year"> 2026</span>
-        </div>
-      </div>
-      <div class="topbar-coins" title="Your current coin balance">
-        <i class="bi bi-coin"></i>
-        <span id="topbar-coins" class="coin-val">0</span>
-      </div>
-    </header>
+<header class="topbar">
+  <div class="topbar-brand">
+    <img src="https://cdn-icons-png.flaticon.com/512/706/706023.png" alt="Arcade Logo" class="topbar-logo-img" />
+    <div>
+      <span class="topbar-title">ARCADE</span>
+      <span class="topbar-year"> 2026</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="topbar-avatar" id="topbar-avatar" title="Your avatar">
+      <img id="topbar-avatar-img" src="" alt="Avatar" class="topbar-avatar-img hidden" />
+      <span id="topbar-avatar-fallback" class="topbar-avatar-fallback">👾</span>
+    </div>
+    <div class="topbar-coins" title="Your current coin balance">
+      <i class="bi bi-coin"></i>
+      <span id="topbar-coins" class="coin-val">0</span>
+    </div>
+  </div>
+</header>
 
     <main id="page-container">
 
@@ -214,25 +220,15 @@
       <div id="page-profile" class="page">
         <h2 class="page-title"><i class="bi bi-person-circle"></i> PROFILE</h2>
         <section class="profile-section">
-          <h3 class="section-label"><i class="bi bi-emoji-smile"></i> AVATAR</h3>
-          <div class="avatar-display">
-            <div class="avatar-big" id="avatar-preview">
-              <img id="avatar-preview-img" src="" alt="Avatar" class="avatar-preview-img hidden" />
-              <span id="avatar-preview-fallback">?</span>
-            </div>
-            <p class="avatar-hint">Choose your Pokémon persona</p>
-          </div>
-          <div class="pokemon-avatar-section">
-            <div id="pokemon-avatar-grid" class="pokemon-avatar-grid">
-              <div class="pokemon-loading"><i class="bi bi-arrow-repeat"></i> Loading Pokémon…</div>
-            </div>
-            <div class="pokemon-pagination">
-              <button id="btn-pokemon-prev" class="btn-pokemon-nav" disabled><i class="bi bi-chevron-left"></i> Prev</button>
-              <span id="pokemon-page-label" class="pokemon-page-label">Page 1</span>
-              <button id="btn-pokemon-next" class="btn-pokemon-nav">Next <i class="bi bi-chevron-right"></i></button>
-            </div>
-          </div>
-        </section>
+  <h3 class="section-label"><i class="bi bi-emoji-smile"></i> AVATAR</h3>
+  <div class="avatar-display">
+    <div class="avatar-big" id="avatar-preview">
+      <img id="avatar-preview-img" src="" alt="Avatar" class="avatar-preview-img hidden" />
+      <span id="avatar-preview-fallback">?</span>
+    </div>
+    <p class="avatar-hint">Hold any Pokémon in your collection to set it as your avatar</p>
+  </div>
+</section>
         <section class="profile-section">
           <h3 class="section-label">
             <i class="bi bi-collection-fill" style="color:var(--poke-red)"></i> POKÉMON COLLECTION
@@ -734,6 +730,32 @@
     </div>
   </div>
 </div>
+<!-- ═══════════════════════════════════════════════
+       AVATAR CONFIRM MODAL
+  ═══════════════════════════════════════════════ -->
+  <div id="avatar-confirm-modal" class="capture-modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Set avatar">
+    <div class="capture-modal acm-modal">
+      <div class="acm-header">
+        <h3 class="acm-title">SET AS AVATAR?</h3>
+        <p class="acm-subtitle">This Pokémon will represent you everywhere</p>
+      </div>
+      <div class="acm-body">
+        <div class="acm-img-wrap">
+          <img id="acm-pokemon-img" src="" alt="" class="acm-pokemon-img" />
+          <div class="acm-img-glow"></div>
+        </div>
+        <p class="acm-pokemon-name" id="acm-pokemon-name"></p>
+      </div>
+      <div class="acm-footer">
+        <button id="acm-confirm-btn" class="btn-howto-close acm-confirm">
+          <i class="bi bi-person-check-fill"></i> YES, SET AS AVATAR
+        </button>
+        <button id="acm-cancel-btn" class="acm-cancel">
+          <i class="bi bi-x-circle"></i> CANCEL
+        </button>
+      </div>
+    </div>
+  </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script type="module" src="app.js"></script>
