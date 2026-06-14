@@ -280,16 +280,33 @@ const parseAvatar = (raw) => {
 };
 const avatarToString = (av) => `pokemon:${av.id}:${av.name}`;
 const renderAvatarPreview = (av) => {
+  // ── Profile page avatar ──
   const img  = $("avatar-preview-img");
   const fall = $("avatar-preview-fallback");
-  if (!img || !fall) return;
-  if (av?.type === "pokemon") {
-    img.src = POKE_SPRITE_URL(av.id); img.alt = av.name;
-    cls.remove(img, "hidden"); cls.add(fall, "hidden");
-  } else {
-    cls.add(img, "hidden"); cls.remove(fall, "hidden"); fall.textContent = "?";
+  if (img && fall) {
+    if (av?.type === "pokemon") {
+      img.src = POKE_ARTWORK_URL(av.id); img.alt = av.name;
+      img.onerror = () => { img.src = POKE_SPRITE_URL(av.id); };
+      cls.remove(img, "hidden"); cls.add(fall, "hidden");
+    } else {
+      cls.add(img, "hidden"); cls.remove(fall, "hidden"); fall.textContent = "?";
+    }
+  }
+
+  // ── Topbar avatar ──
+  const tbImg  = $("topbar-avatar-img");
+  const tbFall = $("topbar-avatar-fallback");
+  if (tbImg && tbFall) {
+    if (av?.type === "pokemon") {
+      tbImg.src = POKE_ARTWORK_URL(av.id); tbImg.alt = av.name;
+      tbImg.onerror = () => { tbImg.src = POKE_SPRITE_URL(av.id); };
+      cls.remove(tbImg, "hidden"); cls.add(tbFall, "hidden");
+    } else {
+      cls.add(tbImg, "hidden"); cls.remove(tbFall, "hidden");
+    }
   }
 };
+
 const avatarHtml = (raw) => {
   const av = parseAvatar(raw);
   if (av.type === "pokemon")
@@ -356,9 +373,11 @@ const DB = {
     return snap.exists() ? snap.data() : null;
   },
   async createUser(uid, username) {
-    const data = {
+  const randomId = ALL_VALID_IDS[Math.floor(Math.random() * ALL_VALID_IDS.length)];
+  const randomName = pokeName(randomId);
+  const data = {
       username,
-      avatar:               avatarToString(DEFAULT_AVATAR),
+      avatar: avatarToString({ type: "pokemon", id: randomId, name: randomName }),
       coins:                100,
       totalFruitSpins:      0,
       totalLuckySpins:      0,
@@ -509,10 +528,11 @@ const Router = {
     if (page==="profile")   ProfilePage.refresh();
   },
   init() {
-    document.querySelectorAll(".nav-btn").forEach(btn =>
-      btn.addEventListener("click", () => this.go(btn.dataset.page)));
-    document.querySelectorAll("[data-nav]").forEach(el =>
-      el.addEventListener("click", () => this.go(el.dataset.nav)));
+  document.querySelectorAll(".nav-btn").forEach(btn =>
+    btn.addEventListener("click", () => this.go(btn.dataset.page)));
+  document.querySelectorAll("[data-nav]").forEach(el =>
+    el.addEventListener("click", () => this.go(el.dataset.nav)));
+  $("topbar-avatar")?.addEventListener("click", () => this.go("profile"));
   },
 };
 
@@ -637,64 +657,10 @@ const AuthScreen = {
 };
 
 // ═══════════════════════════════════════════════════
-//  POKÉMON AVATAR PICKER (Gen 1, profile page)
+//  POKÉMON AVATAR PICKER  (removed — avatars are now
+//  set from the collection via long-press)
 // ═══════════════════════════════════════════════════
-const PokemonPicker = (() => {
-  let _page = 0, _selected = null;
-  const totalPages = Math.ceil(POKE_COUNT / POKE_PER_PAGE);
-  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-  const render = () => {
-    const grid = $("pokemon-avatar-grid"); if (!grid) return;
-    const start = _page * POKE_PER_PAGE + 1;
-    const end   = Math.min(start + POKE_PER_PAGE - 1, POKE_COUNT);
-    grid.innerHTML = "";
-    for (let id = start; id <= end; id++) {
-      const card = document.createElement("div");
-      card.className  = "pokemon-card" + (_selected?.id===id ? " active" : "");
-      card.dataset.id = id;
-      const name = POKE_NAMES[id] || `pokemon-${id}`;
-      card.innerHTML = `<img class="pokemon-img" src="${POKE_SPRITE_URL(id)}" alt="${name}" loading="lazy" /><span class="pokemon-name">${cap(name)}</span>`;
-      card.addEventListener("click", () => selectPokemon(id, name));
-      grid.appendChild(card);
-    }
-    const prev=$("btn-pokemon-prev"), next=$("btn-pokemon-next"), label=$("pokemon-page-label");
-    if (prev)  prev.disabled  = _page===0;
-    if (next)  next.disabled  = _page>=totalPages-1;
-    if (label) label.textContent = `Page ${_page+1} / ${totalPages}`;
-  };
-  const selectPokemon = (id, name) => {
-    _selected = { id, name };
-    document.querySelectorAll(".pokemon-card").forEach(c => cls.toggle(c,"active",parseInt(c.dataset.id)===id));
-    renderAvatarPreview({ type:"pokemon", id, name });
-    if (State.user && State.userData) {
-      const str = avatarToString({ type:"pokemon", id, name });
-      State.userData.avatar = str;
-      DB.updateUser(State.user.uid, { avatar:str }).catch(()=>{});
-      Toast.show(`${cap(name)} selected!`, "win");
-    }
-  };
-  const init = (currentAvatar) => {
-    _page=0; _selected = currentAvatar?.type==="pokemon" ? currentAvatar : null;
-    if (_selected) _page = Math.floor((_selected.id-1)/POKE_PER_PAGE);
-    render();
-    const prev=$("btn-pokemon-prev"), next=$("btn-pokemon-next");
-    if (prev) {
-      const np=prev.cloneNode(true); prev.parentNode.replaceChild(np,prev);
-      np.addEventListener("click", () => { if(_page>0){_page--;render();} });
-    }
-    if (next) {
-      const nn=next.cloneNode(true); next.parentNode.replaceChild(nn,next);
-      nn.addEventListener("click", () => { if(_page<totalPages-1){_page++;render();} });
-    }
-  };
-  const refresh = (currentAvatar) => {
-    if (currentAvatar?.type==="pokemon" && _selected?.id!==currentAvatar.id) {
-      _selected=currentAvatar; _page=Math.floor((_selected.id-1)/POKE_PER_PAGE);
-    }
-    render();
-  };
-  return { init, refresh };
-})();
+const PokemonPicker = { init: () => {}, refresh: () => {} };
 
 // ═══════════════════════════════════════════════════
 //  PROFILE PAGE
@@ -704,6 +670,17 @@ const ProfilePage = {
   reset() { this._initialized = false; },
   init() {
     $("btn-signout")?.addEventListener("click", () => { Daily.stop(); signOut(auth); });
+
+    // Confirm — reads _pendingAvatar set at open time, no cloning ever needed
+    $("acm-confirm-btn")?.addEventListener("click", () => {
+      if (this._pendingAvatar) {
+        this._setAvatar(this._pendingAvatar.id, this._pendingAvatar.name);
+      }
+    });
+    $("acm-cancel-btn")?.addEventListener("click", () => this._closeAvatarModal());
+    $("avatar-confirm-modal")?.addEventListener("click", e => {
+      if (e.target.id === "avatar-confirm-modal") this._closeAvatarModal();
+    });
   },
   refresh() {
     if (!State.userData) return;
@@ -719,8 +696,6 @@ const ProfilePage = {
       $("acc-since").textContent = ts ? fmt.date(ts) : "—";
     }
     renderAvatarPreview(av);
-    if (!this._initialized) { PokemonPicker.init(av); this._initialized=true; }
-    else { PokemonPicker.refresh(av); }
     this._renderCollection(d.pokemonCollection || []);
   },
   _renderCollection(collection) {
@@ -731,20 +706,113 @@ const ProfilePage = {
       return;
     }
     wrap.innerHTML = "";
-    const sorted = [...collection].sort((a,b) => a.id - b.id);
-    sorted.forEach(({ id, name, tier }) => {
-      const isLegend = tier === "t2" || TIER2_IDS.has(id);
+
+    // Split into legendary and common groups, each sorted by id
+    const legends = [...collection].filter(p => p.tier==="t2" || TIER2_IDS.has(p.id)).sort((a,b)=>a.id-b.id);
+    const commons = [...collection].filter(p => p.tier!=="t2" && !TIER2_IDS.has(p.id)).sort((a,b)=>a.id-b.id);
+
+    const currentAvatarId = parseAvatar(State.userData?.avatar)?.id;
+
+    const _makeCard = (p, isLegend) => {
+      const { id, name } = p;
+      const isActive = id === currentAvatarId;
       const card = document.createElement("div");
-      card.className = "collection-card" + (isLegend ? " legendary-card" : "");
+      card.className = "collection-card" + (isLegend ? " legendary-card" : "") + (isActive ? " avatar-active" : "");
       card.innerHTML = `
         <div class="collection-card-img-wrap">
           <img src="${POKE_ARTWORK_URL(id)}" alt="${name}" loading="lazy" class="collection-card-img" onerror="this.src='${POKE_SPRITE_URL(id)}'" />
         </div>
-        ${isLegend ? `<span class="collection-legend-badge"><i class="bi bi-gem-fill"></i></span>` : ""}
+        ${isLegend  ? `<span class="collection-legend-badge"><i class="bi bi-gem-fill"></i></span>` : ""}
+        ${isActive  ? `<span class="collection-avatar-badge"><i class="bi bi-person-fill"></i></span>` : ""}
         <span class="collection-card-name">${name}</span>
-        <span class="collection-card-id">#${String(id).padStart(3,"0")}</span>`;
-      wrap.appendChild(card);
+        <span class="collection-card-id">#${String(id).padStart(3,"0")}</span>
+        <span class="collection-hold-hint">Hold to set avatar</span>`;
+
+      // Long-press / hold detection (works mouse + touch)
+      let holdTimer = null;
+      const startHold = () => { holdTimer = setTimeout(() => this._promptAvatar(id, name), 600); };
+      const cancelHold = () => clearTimeout(holdTimer);
+      card.addEventListener("mousedown",   startHold);
+      card.addEventListener("touchstart",  startHold,  { passive:true });
+      card.addEventListener("mouseup",     cancelHold);
+      card.addEventListener("mouseleave",  cancelHold);
+      card.addEventListener("touchend",    cancelHold);
+      card.addEventListener("touchcancel", cancelHold);
+
+      return card;
+    };
+
+    // ── Legendary / Epic section ──
+    if (legends.length) {
+      const legendHeader = document.createElement("div");
+      legendHeader.className = "collection-section-header legendary-header";
+      legendHeader.innerHTML = `<i class="bi bi-gem-fill"></i> LEGENDARY & EPIC <span class="csh-count">${legends.length}</span>`;
+      wrap.appendChild(legendHeader);
+
+      const legendGrid = document.createElement("div");
+      legendGrid.className = "collection-subgrid";
+      legends.forEach(p => legendGrid.appendChild(_makeCard(p, true)));
+      wrap.appendChild(legendGrid);
+    }
+
+    // ── Common section ──
+    if (commons.length) {
+      const commonHeader = document.createElement("div");
+      commonHeader.className = "collection-section-header common-header";
+      commonHeader.innerHTML = `<i class="bi bi-collection-fill"></i> COMMON <span class="csh-count">${commons.length}</span>`;
+      wrap.appendChild(commonHeader);
+
+      const commonGrid = document.createElement("div");
+      commonGrid.className = "collection-subgrid";
+      commons.forEach(p => commonGrid.appendChild(_makeCard(p, false)));
+      wrap.appendChild(commonGrid);
+    }
+  },
+
+  _pendingAvatar: null,   // { id, name } — set when modal opens, read on confirm
+
+  _promptAvatar(id, name) {
+    const modal = $("avatar-confirm-modal"); if (!modal) return;
+    const img   = $("acm-pokemon-img");
+    const lbl   = $("acm-pokemon-name");
+    if (img) {
+      img.src     = POKE_ARTWORK_URL(id);
+      img.onerror = () => { img.src = POKE_SPRITE_URL(id); };
+    }
+    if (lbl) lbl.textContent = name;
+
+    // Store pending selection — confirm button reads this, no cloning needed
+    this._pendingAvatar = { id, name };
+
+    // Force-reset visibility state before reopening
+    modal.classList.remove("visible");
+    modal.classList.remove("hidden");
+    // Let the browser paint the reset, then slide in
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        modal.classList.add("visible");
+      });
     });
+  },
+
+  _closeAvatarModal() {
+    const modal = $("avatar-confirm-modal"); if (!modal) return;
+    modal.classList.remove("visible");
+    // Use a short fixed timeout instead of transitionend to avoid stale listeners
+    setTimeout(() => {
+      modal.classList.add("hidden");
+      this._pendingAvatar = null;
+    }, 320);
+  },
+
+  async _setAvatar(id, name) {
+    const str = avatarToString({ type:"pokemon", id, name });
+    State.userData.avatar = str;
+    await DB.updateUser(State.user.uid, { avatar:str });
+    renderAvatarPreview({ type:"pokemon", id, name });
+    this._closeAvatarModal();
+    this._renderCollection(State.userData.pokemonCollection || []);
+    Toast.show(`${name} is now your avatar!`, "win", 3000);
   },
 };
 
