@@ -1,8 +1,13 @@
-
 /**
  * ARCADE 2026 — app.js
  * Firebase: Username/Password Auth + Firestore
- * Games: Fruit Spin, Lucky 777, Capture a Pokémon (Tier 1 & Tier 2)
+ * Games: Fruit Spin, Lucky 777, Capture a Pokémon (Tier 1 & Tier 2), Pæir a Pæra
+ *
+ * Firestore read optimisations (v2):
+ *  - Spin / pull history capped at 5 items and cached in memory for the session
+ *  - Dashboard activity cached per game; re-fetched only on explicit tab switch
+ *  - Leaderboard cached for the session; reloaded only on manual revisit after first load
+ *  - Dashboard skips full reload if data was already loaded this session (dirty flag)
  */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -73,20 +78,46 @@ const LUCKY_PAYOUTS   = {
 };
 const LUCKY_PARTIAL_WIN = 5;
 
-const DAILY_REWARD   = 100;
-const MS_PER_DAY     = 86_400_000;
-const MS_PER_WEEK    = 7 * MS_PER_DAY;
+const DAILY_REWARD = 100;
+const MS_PER_DAY  = 86_400_000;
+const MS_PER_WEEK = 7 * MS_PER_DAY;
+
+// ── History constants ──────────────────────────────
+const HISTORY_LIMIT = 5; // items shown & fetched from Firestore
+
+// ═══════════════════════════════════════════════════
+//  PÆIR A PÆRA CONSTANTS
+// ═══════════════════════════════════════════════════
+const PAER_COST           = 5;
+const PAER_REVEAL_MS      = 200;
+const PAER_SHUFFLE_MS     = 1800;
+const PAER_DURATION_SEC   = 120;
+const PAER_CASHOUT_BLOCK  = 5000;
+const PAER_CASHOUT_COINS  = 50;
+
+const PAER_TILES = [
+  { emoji: "💎", label: "Diamond", value: 1000, cls: "diamond", count: 2 },
+  { emoji: "💰", label: "Gold Bag", value: 500,  cls: "gold",    count: 5 },
+  { emoji: "💵", label: "Cash",     value: 100,  cls: "cash",    count: 9 },
+  { emoji: "💣", label: "Bomb",     value: 0,    cls: "bomb",    count: 9 },
+];
+
+const PAER_CASHOUT_TIERS = [
+  { need: 5000,  coins: 50  },
+  { need: 10000, coins: 100 },
+  { need: 15000, coins: 150 },
+  { need: 25000, coins: 250 },
+  { need: 50000, coins: 500 },
+];
 
 // ═══════════════════════════════════════════════════
 //  CAPTURE CONSTANTS
 // ═══════════════════════════════════════════════════
-const CAPTURE_BALL_COUNT = 5;
-
-const CAPTURE_T1_BASE_COST = 50;
-const CAPTURE_T1_INCREMENT = 50;
-
-const CAPTURE_T2_BASE_COST = 150;
-const CAPTURE_T2_INCREMENT = 50;
+const CAPTURE_BALL_COUNT    = 5;
+const CAPTURE_T1_BASE_COST  = 50;
+const CAPTURE_T1_INCREMENT  = 50;
+const CAPTURE_T2_BASE_COST  = 150;
+const CAPTURE_T2_INCREMENT  = 50;
 
 // ═══════════════════════════════════════════════════
 //  POKÉMON DATA — Names (Gen 1 for avatar picker)
@@ -170,9 +201,9 @@ const db          = getFirestore(firebaseApp);
 // ═══════════════════════════════════════════════════
 //  UTILITY HELPERS
 // ═══════════════════════════════════════════════════
-const $     = (id)               => document.getElementById(id);
+const $     = (id)                => document.getElementById(id);
 const qs    = (sel, ctx=document) => ctx.querySelector(sel);
-const sleep = (ms)               => new Promise(r => setTimeout(r, ms));
+const sleep = (ms)                => new Promise(r => setTimeout(r, ms));
 
 const cls = {
   add:    (el, ...c) => el?.classList.add(...c),
@@ -222,6 +253,21 @@ const weightedPick = (items, totalWeight) => {
 };
 
 // ═══════════════════════════════════════════════════
+//  SESSION CACHE
+// ═══════════════════════════════════════════════════
+const Cache = {
+  _store: {},
+  get(key) { return this._store[key] ?? null; },
+  set(key, value) { this._store[key] = value; },
+  prepend(key, item) {
+    const arr = this._store[key] ?? [];
+    this._store[key] = [item, ...arr].slice(0, HISTORY_LIMIT);
+  },
+  has(key) { return key in this._store; },
+  clear() { this._store = {}; },
+};
+
+// ═══════════════════════════════════════════════════
 //  POKÉMON AVATAR HELPERS
 // ═══════════════════════════════════════════════════
 const parseAvatar = (raw) => {
@@ -232,7 +278,7 @@ const parseAvatar = (raw) => {
   }
   return DEFAULT_AVATAR;
 };
-const avatarToString  = (av) => `pokemon:${av.id}:${av.name}`;
+const avatarToString = (av) => `pokemon:${av.id}:${av.name}`;
 const renderAvatarPreview = (av) => {
   const img  = $("avatar-preview-img");
   const fall = $("avatar-preview-fallback");
@@ -352,9 +398,14 @@ const DB = {
       createdAt: serverTimestamp(),
     });
   },
-  async getSpins(uid, game, count=20) {
-    const q = query(spinsCol(), where("uid","==",uid), where("game","==",game),
-                    orderBy("createdAt","desc"), limit(count));
+  async getSpins(uid, game) {
+    const q = query(
+      spinsCol(),
+      where("uid","==",uid),
+      where("game","==",game),
+      orderBy("createdAt","desc"),
+      limit(HISTORY_LIMIT),
+    );
     const snap = await getDocs(q);
     return snap.docs.map(d => ({ id:d.id, ...d.data() }));
   },
@@ -701,7 +752,11 @@ const ProfilePage = {
 //  DASHBOARD PAGE
 // ═══════════════════════════════════════════════════
 const DashPage = {
-  _activeGame: "fruit",
+  _activeGame:       "fruit",
+  _leaderboardLoaded: false,
+  _candidatesLoaded:  false,
+  _activityLoaded:   { fruit: false, lucky: false },
+
   async refresh() {
     if (!State.user || !State.userData) return;
     const d = State.userData;
@@ -710,13 +765,30 @@ const DashPage = {
     if ($("stat-lucky-spins"))  $("stat-lucky-spins").textContent  = fmt.coins(d.totalLuckySpins||0);
     if ($("stat-captures"))     $("stat-captures").textContent     = fmt.coins(d.totalCaptures||0);
     if ($("stat-best-win"))     $("stat-best-win").textContent     = fmt.coins(d.bestWin||0);
-    await Promise.all([this.loadLeaderboard(), this.loadActivity(this._activeGame), this.loadPokemonCandidates()]);
+
+    const tasks = [];
+    if (!this._leaderboardLoaded) tasks.push(this.loadLeaderboard());
+    if (!this._candidatesLoaded)  tasks.push(this.loadPokemonCandidates());
+    if (!this._activityLoaded[this._activeGame]) tasks.push(this.loadActivity(this._activeGame));
+    else this._renderActivityFromCache(this._activeGame);
+
+    if (tasks.length) await Promise.all(tasks);
   },
+
+  reset() {
+    this._leaderboardLoaded  = false;
+    this._candidatesLoaded   = false;
+    this._activityLoaded     = { fruit: false, lucky: false };
+  },
+
   async loadLeaderboard() {
     const list=$("leaderboard-list"); if(!list) return;
     list.innerHTML=`<div class="lb-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div>`;
     try {
-      const entries = await DB.getLeaderboard(20);
+      const entries = Cache.has("leaderboard")
+        ? Cache.get("leaderboard")
+        : await (async () => { const r = await DB.getLeaderboard(20); Cache.set("leaderboard", r); return r; })();
+      this._leaderboardLoaded = true;
       list.innerHTML="";
       if (!entries.length) { list.innerHTML=`<div class="lb-empty"><i class="bi bi-people"></i> No players yet.</div>`; return; }
       const medals=["🥇","🥈","🥉"];
@@ -736,11 +808,15 @@ const DashPage = {
       list.innerHTML=`<div class="lb-empty"><i class="bi bi-wifi-off"></i> Could not load leaderboard.</div>`;
     }
   },
+
   async loadPokemonCandidates() {
     const list=$("pokemon-candidates-list"); if(!list) return;
     list.innerHTML=`<div class="candidates-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div>`;
     try {
-      const items = await DB.getRecentCaptures(3);
+      const items = Cache.has("recentCaptures")
+        ? Cache.get("recentCaptures")
+        : await (async () => { const r = await DB.getRecentCaptures(3); Cache.set("recentCaptures", r); return r; })();
+      this._candidatesLoaded = true;
       list.innerHTML="";
       if (!items.length) { list.innerHTML=`<div class="candidates-empty"><i class="bi bi-award"></i> No captures yet — be the first!</div>`; return; }
       items.forEach(item => {
@@ -764,42 +840,74 @@ const DashPage = {
       list.innerHTML=`<div class="candidates-empty"><i class="bi bi-wifi-off"></i> Could not load.</div>`;
     }
   },
+
   async loadActivity(game) {
-    this._activeGame=game;
+    this._activeGame = game;
     document.querySelectorAll(".act-tab").forEach(t => cls.toggle(t,"act-tab-active",t.dataset.game===game));
+
+    const cacheKey = `activity_${game}`;
+    if (Cache.has(cacheKey)) {
+      this._renderActivityFromCache(game);
+      this._activityLoaded[game] = true;
+      return;
+    }
+
     const list=$("activity-list"); if(!list) return;
     list.innerHTML=`<div class="act-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div>`;
     try {
-      const items=await DB.getSpins(State.user.uid,game,20);
-      list.innerHTML="";
-      if (!items.length) { list.innerHTML=`<div class="act-empty"><i class="bi bi-joystick"></i> No activity yet — go play!</div>`; return; }
-      items.forEach(item => {
-        const won=item.coinsWon??0, cost=item.coinsCost??(game==="fruit"?FRUIT_SPIN_COST:LUCKY_PULL_COST);
-        const net=won-cost, date=toDate(item.createdAt), isWin=net>=0;
-        const el=document.createElement("div"); el.className="act-item";
-        let emoji, resultText;
-        if (game==="fruit") {
-          emoji=item.symbols||"🎰"; resultText=won>0?`Won ${fmt.coins(won)} coins`:"Bomb — no reward";
-        } else {
-          const syms=(item.symbols||"").split(",");
-          emoji=syms.slice(0,3).join("")||"7️⃣"; resultText=won>0?`Won ${fmt.coins(won)} coins`:"No match";
-        }
-        el.innerHTML=`
-          <span class="act-emoji">${emoji}</span>
-          <div class="act-body">
-            <div class="act-result ${isWin?"win":"loss"}">${resultText}</div>
-            <div class="act-time"><i class="bi bi-clock"></i> ${date?fmt.time(date)+" · "+fmt.date(date):"Just now"}</div>
-          </div>
-          <span class="act-coins ${isWin?"win":"loss"}">${isWin?"+":""}${fmt.coins(net)}</span>`;
-        list.appendChild(el);
-      });
+      const items = await DB.getSpins(State.user.uid, game);
+      Cache.set(cacheKey, items);
+      this._activityLoaded[game] = true;
+      this._renderActivityList(list, items, game);
     } catch(err) {
       console.error("Activity error:",err);
       list.innerHTML=`<div class="act-empty"><i class="bi bi-wifi-off"></i> Could not load activity.</div>`;
     }
   },
+
+  _renderActivityFromCache(game) {
+    document.querySelectorAll(".act-tab").forEach(t => cls.toggle(t,"act-tab-active",t.dataset.game===game));
+    const list = $("activity-list"); if (!list) return;
+    const cacheKey = `activity_${game}`;
+    const items = Cache.get(cacheKey) ?? [];
+    this._renderActivityList(list, items, game);
+  },
+
+  _renderActivityList(list, items, game) {
+    list.innerHTML = "";
+    if (!items.length) {
+      list.innerHTML=`<div class="act-empty"><i class="bi bi-joystick"></i> No activity yet — go play!</div>`;
+      return;
+    }
+    items.forEach(item => {
+      const won=item.coinsWon??0, cost=item.coinsCost??(game==="fruit"?FRUIT_SPIN_COST:LUCKY_PULL_COST);
+      const net=won-cost, date=toDate(item.createdAt), isWin=net>=0;
+      const el=document.createElement("div"); el.className="act-item";
+      let emoji, resultText;
+      if (game==="fruit") {
+        emoji=item.symbols||"🎰"; resultText=won>0?`Won ${fmt.coins(won)} coins`:"Bomb — no reward";
+      } else {
+        const syms=(item.symbols||"").split(",");
+        emoji=syms.slice(0,3).join("")||"7️⃣"; resultText=won>0?`Won ${fmt.coins(won)} coins`:"No match";
+      }
+      el.innerHTML=`
+        <span class="act-emoji">${emoji}</span>
+        <div class="act-body">
+          <div class="act-result ${isWin?"win":"loss"}">${resultText}</div>
+          <div class="act-time"><i class="bi bi-clock"></i> ${date?fmt.time(date)+" · "+fmt.date(date):"Just now"}</div>
+        </div>
+        <span class="act-coins ${isWin?"win":"loss"}">${isWin?"+":""}${fmt.coins(net)}</span>`;
+      list.appendChild(el);
+    });
+    const notice = document.createElement("p");
+    notice.className = "hist-session-notice";
+    notice.innerHTML = `<i class="bi bi-info-circle"></i> Showing last ${HISTORY_LIMIT} plays · history clears each session`;
+    list.appendChild(notice);
+  },
+
   bindTabs() {
-    document.querySelectorAll(".act-tab").forEach(t => t.addEventListener("click", () => this.loadActivity(t.dataset.game)));
+    document.querySelectorAll(".act-tab").forEach(t =>
+      t.addEventListener("click", () => this.loadActivity(t.dataset.game)));
   },
 };
 
@@ -842,10 +950,35 @@ const FruitGame = {
     cls.add($("fruit-result"),"hidden"); this._refreshCoins(); this._loadHistory();
   },
   _refreshCoins() { const el=$("fruit-coins-display"); if(el) el.textContent=fmt.coins(Coins.get()); },
+
   async _loadHistory() {
     const list=$("fruit-history"); if(!list||!State.user) return;
-    try { const items=await DB.getSpins(State.user.uid,"fruit",10); list.innerHTML=""; items.forEach(item=>list.appendChild(this._buildHistItem(item))); } catch{}
+    const cacheKey = "history_fruit";
+    if (Cache.has(cacheKey)) {
+      this._renderHistory(list, Cache.get(cacheKey));
+      return;
+    }
+    list.innerHTML = `<div class="fh-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div>`;
+    try {
+      const items = await DB.getSpins(State.user.uid, "fruit");
+      Cache.set(cacheKey, items);
+      this._renderHistory(list, items);
+    } catch {
+      list.innerHTML = "";
+    }
   },
+
+  _renderHistory(list, items) {
+    list.innerHTML = "";
+    items.forEach(item => list.appendChild(this._buildHistItem(item)));
+    if (items.length) {
+      const notice = document.createElement("p");
+      notice.className = "hist-session-notice";
+      notice.innerHTML = `<i class="bi bi-info-circle"></i> Last ${HISTORY_LIMIT} spins · clears each session`;
+      list.appendChild(notice);
+    }
+  },
+
   _buildHistItem(item) {
     const el=document.createElement("div"); el.className="fh-item";
     const sym=item.symbols||"?", won=item.coinsWon??0, cost=item.coinsCost??FRUIT_SPIN_COST;
@@ -853,11 +986,16 @@ const FruitGame = {
     el.innerHTML=`<span class="fh-emoji">${sym}</span><span class="fh-label">${won>0?"Collected":"Bomb!"} · <i class="bi bi-clock"></i> ${date?fmt.time(date):"now"}</span><span class="${isWin?"fh-win":"fh-loss"}">${isWin?"+":""}${fmt.coins(net)}</span>`;
     return el;
   },
-  _prependHist(symbol,coinsWon) {
+
+  _prependHist(symbol, coinsWon) {
     const list=$("fruit-history"); if(!list) return;
-    const el=this._buildHistItem({symbols:symbol,coinsWon,coinsCost:FRUIT_SPIN_COST,createdAt:null});
-    list.prepend(el); while(list.children.length>15) list.lastChild?.remove();
+    const newItem = { symbols:symbol, coinsWon, coinsCost:FRUIT_SPIN_COST, createdAt:null };
+    Cache.prepend("history_fruit", newItem);
+    this._renderHistory(list, Cache.get("history_fruit"));
+    Cache.prepend("activity_fruit", newItem);
+    DashPage._activityLoaded["fruit"] = true;
   },
+
   async spin() {
     if (State.fruitSpinning) return;
     if (Coins.get()<FRUIT_SPIN_COST) { Toast.show("Not enough coins!","loss"); return; }
@@ -925,10 +1063,35 @@ const LuckyGame = {
     if(symbols[0]===symbols[1]||symbols[1]===symbols[2]||symbols[0]===symbols[2]) return LUCKY_PARTIAL_WIN;
     return 0;
   },
+
   async _loadHistory() {
     const list=$("lucky-history"); if(!list||!State.user) return;
-    try { const items=await DB.getSpins(State.user.uid,"lucky",10); list.innerHTML=""; items.forEach(item=>list.appendChild(this._buildHistItem(item))); } catch{}
+    const cacheKey = "history_lucky";
+    if (Cache.has(cacheKey)) {
+      this._renderHistory(list, Cache.get(cacheKey));
+      return;
+    }
+    list.innerHTML = `<div class="fh-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div>`;
+    try {
+      const items = await DB.getSpins(State.user.uid, "lucky");
+      Cache.set(cacheKey, items);
+      this._renderHistory(list, items);
+    } catch {
+      list.innerHTML = "";
+    }
   },
+
+  _renderHistory(list, items) {
+    list.innerHTML = "";
+    items.forEach(item => list.appendChild(this._buildHistItem(item)));
+    if (items.length) {
+      const notice = document.createElement("p");
+      notice.className = "hist-session-notice";
+      notice.innerHTML = `<i class="bi bi-info-circle"></i> Last ${HISTORY_LIMIT} pulls · clears each session`;
+      list.appendChild(notice);
+    }
+  },
+
   _buildHistItem(item) {
     const el=document.createElement("div"); el.className="fh-item";
     const syms=(item.symbols||"?-?-?").split(","), won=item.coinsWon??0, cost=item.coinsCost??LUCKY_PULL_COST;
@@ -936,11 +1099,16 @@ const LuckyGame = {
     el.innerHTML=`<span class="fh-emoji">${syms.slice(0,3).join("")}</span><span class="fh-label">${won>0?`Won ${fmt.coins(won)}`:"No match"} · <i class="bi bi-clock"></i> ${date?fmt.time(date):"now"}</span><span class="${isWin?"fh-win":"fh-loss"}">${isWin?"+":""}${fmt.coins(net)}</span>`;
     return el;
   },
-  _prependHist(symbols,coinsWon) {
+
+  _prependHist(symbols, coinsWon) {
     const list=$("lucky-history"); if(!list) return;
-    const el=this._buildHistItem({symbols:symbols.join(","),coinsWon,coinsCost:LUCKY_PULL_COST,createdAt:null});
-    list.prepend(el); while(list.children.length>15) list.lastChild?.remove();
+    const newItem = { symbols:symbols.join(","), coinsWon, coinsCost:LUCKY_PULL_COST, createdAt:null };
+    Cache.prepend("history_lucky", newItem);
+    this._renderHistory(list, Cache.get("history_lucky"));
+    Cache.prepend("activity_lucky", newItem);
+    DashPage._activityLoaded["lucky"] = true;
   },
+
   async pull() {
     if(State.luckySpinning) return;
     if(Coins.get()<LUCKY_PULL_COST){Toast.show("Not enough coins!","loss");return;}
@@ -989,8 +1157,6 @@ const CaptureGame = {
   _revealedPoke:  null,
   _wasFreeThrow:  false,
 
-  // ── Tier helpers ──────────────────────────────────
-
   _lastClaimKey()  { return this._tier === "t1" ? "captureT1LastClaimAt" : "captureT2LastClaimAt"; },
   _paidCountKey()  { return this._tier === "t1" ? "captureT1PaidCount"   : "captureT2PaidCount"; },
   _window()        { return this._tier === "t1" ? MS_PER_DAY  : MS_PER_WEEK; },
@@ -1017,19 +1183,15 @@ const CaptureGame = {
     return Math.max(0, this._window() - (Date.now() - l.getTime()));
   },
 
-  // ── Lifecycle ─────────────────────────────────────
-
   init() {
     $("open-capture")?.addEventListener("click",        () => this.open());
     $("back-capture")?.addEventListener("click",        () => this._closeOverlay());
     $("btn-capture-again")?.addEventListener("click",   () => this._resetForNewThrow());
-    // How to Play modal
     $("btn-capture-howto")?.addEventListener("click",   () => this._showHowToModal());
     $("btn-howto-close")?.addEventListener("click",     () => this._closeHowToModal());
     $("capture-howto-modal")?.addEventListener("click", (e) => {
       if (e.target.id === "capture-howto-modal") this._closeHowToModal();
     });
-    // Tier tab listeners
     document.querySelectorAll(".capture-tier-tab").forEach(btn => {
       btn.addEventListener("click", () => this._switchTier(btn.dataset.tier));
     });
@@ -1047,13 +1209,11 @@ const CaptureGame = {
     this._refreshCoins();
     this._renderTierTabs();
     this._renderState();
-    // Always show How to Play when entering the game
     this._showHowToModal();
   },
 
   _closeOverlay() {
     cls.add($("overlay-capture"), "hidden");
-    // Also close modal if open
     const modal = $("capture-howto-modal");
     if (modal && cls.has(modal, "visible")) {
       cls.remove(modal, "visible");
@@ -1090,13 +1250,10 @@ const CaptureGame = {
     if (overlay) cls.toggle(overlay, "tier2-active", this._tier === "t2");
   },
 
-  // ── How to Play Modal ─────────────────────────────
-
   _showHowToModal() {
     const modal = $("capture-howto-modal");
     if (!modal) return;
     cls.remove(modal, "hidden");
-    // Small delay so transition fires after display:flex kicks in
     requestAnimationFrame(() => {
       requestAnimationFrame(() => cls.add(modal, "visible"));
     });
@@ -1110,8 +1267,6 @@ const CaptureGame = {
       if (!cls.has(modal, "visible")) cls.add(modal, "hidden");
     }, { once: true });
   },
-
-  // ── State rendering ───────────────────────────────
 
   _renderState() {
     const canFree   = this._canClaimFree();
@@ -1167,8 +1322,6 @@ const CaptureGame = {
     $("btn-buy-pokeball")?.addEventListener("click", () => this._buyThrow());
   },
 
-  // ── Pokéballs ─────────────────────────────────────
-
   _renderBalls(interactive=true) {
     const grid = $("pokeballs-grid"); if (!grid) return;
     grid.innerHTML = "";
@@ -1189,8 +1342,6 @@ const CaptureGame = {
       grid.appendChild(ball);
     }
   },
-
-  // ── Ball pick & reveal ────────────────────────────
 
   async _onBallPick(idx) {
     if (this._pickedBall !== null || State.captureRevealing) return;
@@ -1222,8 +1373,6 @@ const CaptureGame = {
     State.captureRevealing = false;
   },
 
-  // ── PokéAPI fetchers ──────────────────────────────
-
   async _fetchSpeciesData(id) {
     try {
       const res  = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
@@ -1248,8 +1397,6 @@ const CaptureGame = {
       return data.types?.map(t => t.type.name) || [];
     } catch { return []; }
   },
-
-  // ── Reveal panel ──────────────────────────────────
 
   async _showReveal(id, name, flavorText, types) {
     const revealEl  = $("capture-reveal");
@@ -1296,8 +1443,6 @@ const CaptureGame = {
     if (againWrap) cls.remove(againWrap, "hidden");
   },
 
-  // ── Persist capture ───────────────────────────────
-
   async _persist(pokeId, pokeName_) {
     if (!State.user || !State.userData) return;
     const now        = new Date();
@@ -1338,10 +1483,11 @@ const CaptureGame = {
       this._tier
     ).catch(() => {});
 
+    Cache.set("recentCaptures", null);
+    DashPage._candidatesLoaded = false;
+
     this._refreshCoins();
   },
-
-  // ── Buy a paid throw ──────────────────────────────
 
   async _buyThrow() {
     if (State.captureRevealing) return;
@@ -1376,8 +1522,6 @@ const CaptureGame = {
     if (againWrap) cls.add(againWrap, "hidden");
   },
 
-  // ── Reset for new throw (after reveal) ────────────
-
   _resetForNewThrow() {
     this._pickedBall   = null;
     this._revealedPoke = null;
@@ -1389,6 +1533,697 @@ const CaptureGame = {
     this._renderState();
   },
 };
+
+// ═══════════════════════════════════════════════════
+//  PÆIR A PÆRA GAME
+// ═══════════════════════════════════════════════════
+const PaerGame = (() => {
+  // ── State ──────────────────────────────────────────
+  let _bank         = 0;
+  let _phase        = "idle";  // idle | preview | play | renewing | done
+  let _tiles        = [];
+  let _timerSec     = PAER_DURATION_SEC;
+  let _timerHandle  = null;
+  let _wave         = 0;
+  let _gifts        = [];
+  let _giftId       = 0;
+
+// Power-up state
+  let _freezeSec    = 0;   // ❄️ seconds remaining
+  let _starSec      = 0;   // ⭐/🌟 seconds remaining
+  let _starMulti    = 1;   // current multiplier (1 = off, 2 = ⭐, 4 = 🌟)
+  let _orbActive    = false; // 🧿 peek in progress
+
+  // ── DOM helper ─────────────────────────────────────
+  const el = (id) => document.getElementById(id);
+
+  // ── Tile definitions ───────────────────────────────
+  // idx: 0=💎 1=💰 2=💵 3=💣 4=🔥 5=🎁 6=❄️ 7=⭐ 8=🧿
+  const TILE_DEFS = [
+    { emoji:"💎", label:"Diamond",  value: 1000, cls:"diamond", effect:"earn"   },
+    { emoji:"💰", label:"Gold Bag", value:  500, cls:"gold",    effect:"earn"   },
+    { emoji:"💵", label:"Cash",     value:  100, cls:"cash",    effect:"earn"   },
+    { emoji:"💣", label:"Bomb",     value:  -10, cls:"bomb",    effect:"burn"   },
+    { emoji:"🔥", label:"Fire",     value: -100, cls:"fire",    effect:"burn"   },
+    { emoji:"🎁", label:"Gift",     value:    0, cls:"gift",    effect:"gift"   },
+    { emoji:"❄️", label:"Freeze",   value:   15, cls:"freeze",  effect:"freeze" },
+    { emoji:"⭐", label:"Star",     value:   25, cls:"star",    effect:"star",  multi:2 },
+    { emoji:"🧿", label:"Orb",      value:    2, cls:"orb",     effect:"orb"    },
+    { emoji:"🌟", label:"Superstar",value:   25, cls:"superstar",effect:"star", multi:4 },
+  ];
+
+  // ── Pool builder (wave-aware) ──────────────────────
+  function _buildPool(wave) {
+    const pool = [];
+
+    // Treasure — thins each wave
+    const diamonds = Math.max(0, 2 - wave);
+    const golds    = Math.max(0, 5 - wave * 2);
+    const cash     = Math.max(0, 9 - wave);
+    for (let i = 0; i < diamonds; i++) pool.push(0);
+    for (let i = 0; i < golds;    i++) pool.push(1);
+    for (let i = 0; i < cash;     i++) pool.push(2);
+
+    // 🎁 gift: 1% chance per renewal wave (wave ≥ 1)
+    if (wave >= 1 && Math.random() < 0.01) pool.push(5);
+
+    // Power-ups (wave ≥ 1, random 1 each per wave)
+    if (wave >= 1) {
+      if (Math.random() < 0.25) pool.push(6); // ❄️
+      if (Math.random() < 0.20) pool.push(7); // ⭐
+      if (Math.random() < 0.18) pool.push(8); // 🧿
+      if (Math.random() < 0.08) pool.push(9); // 🌟 rarer than ⭐
+    }
+
+    // 🔥 grows with wave, fills remainder
+    const fires = wave >= 1 ? Math.min(8, wave * 3) : 0;
+    const needed = 25 - pool.length;
+    const bombs  = Math.max(0, needed - fires);
+    for (let i = 0; i < bombs; i++) pool.push(3);
+    for (let i = 0; i < fires; i++) pool.push(4);
+
+    // Pad / trim to exactly 25
+    while (pool.length < 25) pool.push(3);
+    pool.length = 25;
+
+    // Fisher-Yates shuffle
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool;
+  }
+
+  function _buildTiles(wave) {
+    return _buildPool(wave).map((typeIdx, id) => ({ id, typeIdx, revealed: false }));
+  }
+
+  // ── Coin/bank display ──────────────────────────────
+  function _refreshCoins() {
+    const d = el("paer-coins-display");
+    if (d) d.textContent = fmt.coins(Coins.get());
+  }
+  function _refreshBank() {
+    const d = el("paer-bank-display");
+    if (d) d.textContent = `₱${fmt.coins(_bank)}`;
+    const hint = el("paer-cashout-hint");
+    if (hint) {
+      const blocks = Math.floor(_bank / PAER_CASHOUT_BLOCK);
+      hint.textContent = blocks > 0 ? `= 🪙 ${blocks * PAER_CASHOUT_COINS} coins ready` : "";
+    }
+    _refreshCashoutTiers();
+  }
+  function _refreshCashoutTiers() {
+    const wrap = el("paer-cashout-tiers"); if (!wrap) return;
+    wrap.innerHTML = "";
+    PAER_CASHOUT_TIERS.forEach(tier => {
+      const canUse = _bank >= tier.need;
+      const row = document.createElement("div");
+      row.className = "paer-cashout-row" + (canUse ? " available" : "");
+      row.innerHTML = `
+        <div class="pct-info">
+          <span class="pct-amount">₱${fmt.coins(tier.need)}</span>
+          <span class="pct-arrow">→ 🪙 ${tier.coins} coins</span>
+        </div>
+        ${canUse
+          ? `<button class="btn-paer-convert" data-need="${tier.need}" data-coins="${tier.coins}">CONVERT</button>`
+          : `<span class="pct-locked"><i class="bi bi-lock-fill"></i> Need ₱${fmt.coins(tier.need - _bank)} more</span>`
+        }`;
+      wrap.appendChild(row);
+    });
+    wrap.querySelectorAll(".btn-paer-convert").forEach(btn => {
+      btn.addEventListener("click", () => _cashout(+btn.dataset.need, +btn.dataset.coins));
+    });
+  }
+
+  // ── Power-up status bar ────────────────────────────
+  // Renders the three stacked power-up indicators + current phase label
+  function _renderPowerBar() {
+    const bar = el("paer-power-bar"); if (!bar) return;
+    const parts = [];
+
+    if (_freezeSec > 0)
+      parts.push(`<span class="ppb-pill freeze-pill"><span class="ppb-emoji">❄️</span><span class="ppb-txt">${_freezeSec}s frozen${_freezeSec > 0 ? " · 💣🔥 immune" : ""}</span></span>`);
+    if (_starSec > 0) {
+      const isSuper = _starMulti >= 4;
+      parts.push(`<span class="ppb-pill ${isSuper ? "superstar-pill" : "star-pill"}"><span class="ppb-emoji">${isSuper ? "🌟" : "⭐"}</span><span class="ppb-txt">×${_starMulti} for ${_starSec}s</span></span>`);
+    }
+    if (_orbActive)
+      parts.push(`<span class="ppb-pill orb-pill"><span class="ppb-emoji">🧿</span><span class="ppb-txt">Peeking…</span></span>`);
+
+    bar.innerHTML = parts.join("");
+  }
+
+  function _setStatus(html) {
+    const s = el("paer-status"); if (s) s.innerHTML = html;
+  }
+
+  // ── Timer ──────────────────────────────────────────
+  function _startTimer() {
+    _timerSec = PAER_DURATION_SEC;
+    _tickTimer();
+    _timerHandle = setInterval(() => {
+      if (_freezeSec > 0) {
+        _freezeSec--;
+        _renderPowerBar();
+        return; // tick consumed by freeze — clock doesn't advance
+      }
+      _timerSec--;
+      _tickTimer();
+      if (_timerSec <= 0) _timeUp();
+    }, 1000);
+  }
+  function _tickTimer() {
+    const mm  = String(Math.floor(_timerSec / 60)).padStart(2, "0");
+    const ss  = String(_timerSec % 60).padStart(2, "0");
+    const td  = el("paer-time-display");
+    const bar = el("paer-timer-bar");
+    if (td) {
+      td.textContent = `${mm}:${ss}`;
+      td.className   = "paer-time-display" + (_timerSec <= 20 && _freezeSec === 0 ? " urgent" : _freezeSec > 0 ? " frozen" : "");
+    }
+    if (bar) {
+      const pct = (_timerSec / PAER_DURATION_SEC) * 100;
+      bar.style.width  = `${pct}%`;
+      bar.className    = "paer-timer-bar"
+        + (_freezeSec > 0    ? " frozen"
+          : _timerSec <= 20  ? " urgent"
+          : _timerSec <= 45  ? " warning" : "");
+    }
+  }
+  function _stopTimer() { clearInterval(_timerHandle); _timerHandle = null; }
+
+// ── ❄️ Freeze (+ burn immunity while active) ───────
+  function _applyFreeze(secs) {
+    _freezeSec += secs;
+    _renderPowerBar();
+    _tickTimer();
+    _showPopup(`❄️ +${secs}s freeze!`, "freeze");
+    Toast.show(`❄️ Frozen ${secs}s — immune to 💣🔥!`, "info", 2500);
+  }
+
+  // ── ⭐ / 🌟 Star multiplier ────────────────────────
+  // multi: 2 for ⭐, 4 for 🌟
+  // Rules:
+  //   • If nothing active → start fresh with this multi & duration
+  //   • If same or lower multi active → just add duration, keep higher multi
+  //   • If higher multi already active → just add duration, keep higher multi
+  //   (multi never decreases mid-run; duration always stacks)
+  function _applyStar(secs, multi) {
+    const emoji = multi >= 4 ? "🌟" : "⭐";
+    const label = `×${multi}`;
+
+    if (_starSec > 0) {
+      // Keep the higher multiplier, always stack duration
+      _starMulti = Math.max(_starMulti, multi);
+      _starSec  += secs;
+      _renderPowerBar();
+      _showPopup(`${emoji} +${secs}s added!`, multi >= 4 ? "superstar" : "star");
+      Toast.show(`${emoji} ${label} extended to ${_starSec}s!`, "win", 2000);
+      return;
+    }
+
+    _starSec   = secs;
+    _starMulti = multi;
+    _renderPowerBar();
+    _showPopup(`${emoji} ${label} ACTIVE!`, multi >= 4 ? "superstar" : "star");
+    Toast.show(`${emoji} ${label} money for ${secs}s!`, "win", 2500);
+
+    const tick = setInterval(() => {
+      if (_starSec <= 0) {
+        clearInterval(tick);
+        _starSec   = 0;
+        _starMulti = 1;
+        _renderPowerBar();
+        return;
+      }
+      _starSec--;
+      _renderPowerBar();
+    }, 1000);
+  }
+
+// ── Helper: are there any unrevealed earn tiles? ───
+  function _noEarnersLeft() {
+    return !_tiles.some(t => !t.revealed && TILE_DEFS[t.typeIdx].effect === "earn");
+  }
+
+// ── 🧿 Orb (peek all tiles) ────────────────────────
+  async function _applyOrb() {
+    if (_orbActive) return; // already peeking
+    _orbActive = true;
+    _renderPowerBar();
+    _showPopup("🧿 Peeking!", "orb");
+    Toast.show("🧿 Tiles revealed for 2 seconds!", "info", 2200);
+
+    // Reveal unrevealed tiles visually only (don't set revealed:true)
+    const gridEl = el("paer-grid"); if (!gridEl) return;
+    gridEl.querySelectorAll(".paer-tile:not(.revealed)").forEach(btn => {
+      const id   = +btn.dataset.id;
+      const tile = _tiles.find(t => t.id === id);
+      if (!tile) return;
+      const def  = TILE_DEFS[tile.typeIdx];
+      btn.classList.add("peeking");
+      btn.innerHTML = `<span class="paer-tile-emoji">${def.emoji}</span>${_tileSubLabel(def)}`;
+    });
+
+    await sleep(2000);
+
+    // Flip back tiles that are still unflipped (player didn't tap them)
+    gridEl.querySelectorAll(".paer-tile.peeking").forEach(btn => {
+      btn.classList.remove("peeking");
+      btn.innerHTML = `<span class="paer-tile-back">❓</span>`;
+    });
+    _orbActive = false;
+    _renderPowerBar();
+
+    // After peek ends, check if any earn tiles are still unrevealed.
+    // If none remain, there's nothing worth tapping → auto-renew.
+    if (_phase === "play" && _noEarnersLeft()) {
+      _scheduleRenewal();
+    }
+  }
+
+  // ── Tile rendering ─────────────────────────────────
+  function _tileSubLabel(def) {
+  if (def.effect === "earn") return `<span class="paer-tile-val">+₱${fmt.coins(def.value)}</span>`;
+  if (def.effect === "burn") return `<span class="paer-tile-val burn-val">−₱${fmt.coins(Math.abs(def.value))}</span>`;
+  if (def.effect === "gift") return `<span class="paer-tile-val gift-val">COLLECT!</span>`;
+  if (def.effect === "freeze") return `<span class="paer-tile-val freeze-val">+${def.value}s ❄️</span>`;
+  if (def.effect === "star") return `<span class="paer-tile-val ${def.cls === 'superstar' ? 'superstar-val' : 'star-val'}">×${def.multi} ${def.value}s</span>`;
+  if (def.effect === "orb") return `<span class="paer-tile-val orb-val">PEEK</span>`;
+  return "";
+}
+
+  function _renderGrid(interactive) {
+    const grid = el("paer-grid"); if (!grid) return;
+    grid.innerHTML = "";
+    _tiles.forEach(tile => {
+      const def = TILE_DEFS[tile.typeIdx];
+      const btn = document.createElement("button");
+      btn.className  = "paer-tile" + (tile.revealed ? ` revealed ${def.cls}` : "");
+      btn.disabled   = tile.revealed || !interactive;
+      btn.dataset.id = tile.id;
+      btn.setAttribute("aria-label", tile.revealed ? def.label : "Hidden tile");
+      btn.innerHTML  = tile.revealed
+        ? `<span class="paer-tile-emoji">${def.emoji}</span>${_tileSubLabel(def)}`
+        : `<span class="paer-tile-back">❓</span>`;
+      btn.addEventListener("click", () => _flipTile(tile.id));
+      grid.appendChild(btn);
+    });
+  }
+
+  // ── Flip a tile ────────────────────────────────────
+  function _flipTile(id) {
+    if (_phase !== "play") return;
+    const tile = _tiles.find(t => t.id === id);
+    if (!tile || tile.revealed) return;
+    tile.revealed = true;
+
+    const def = TILE_DEFS[tile.typeIdx];
+    const btn = el("paer-grid")?.querySelector(`[data-id="${id}"]`);
+    if (btn) {
+      btn.disabled  = true;
+      btn.className = `paer-tile revealed ${def.cls} flip-in`;
+      btn.innerHTML = `<span class="paer-tile-emoji">${def.emoji}</span>${_tileSubLabel(def)}`;
+      setTimeout(() => btn.classList.remove("flip-in"), 450);
+    }
+
+    if (def.effect === "earn") {
+      const multi  = _starSec > 0 ? _starMulti : 1;
+      const earned = def.value * multi;
+      _bank += earned;
+      _refreshBank();
+      const starEmoji = _starMulti >= 4 ? "🌟" : "⭐";
+      _showPopup(
+        multi > 1 ? `${starEmoji}×${multi} +₱${fmt.coins(earned)}` : `+₱${fmt.coins(earned)}`,
+        def.cls
+      );
+      Sound.win();
+
+    } else if (def.effect === "burn") {
+      if (_freezeSec > 0) {
+        // ❄️ immunity — no deduction
+        _showPopup(`❄️ IMMUNE!`, "freeze");
+        Toast.show(`❄️ Freeze blocked ${def.emoji}!`, "info", 1800);
+      } else {
+        _bank = Math.max(0, _bank + def.value);
+        _refreshBank();
+        _showPopup(`${def.emoji} −₱${fmt.coins(Math.abs(def.value))}`, def.cls);
+        Sound.bomb();
+      }
+
+    } else if (def.effect === "gift") {
+      _collectGift();
+      Sound.capture();
+
+    } else if (def.effect === "freeze") {
+      _applyFreeze(def.value);
+      Sound.win();
+
+    } else if (def.effect === "star") {
+      _applyStar(def.value, def.multi);
+      Sound.jackpot();
+
+    } else if (def.effect === "orb") {
+      _applyOrb();
+      Sound.capture();
+    }
+
+// Trigger renewal if:
+    // (a) all 25 tiles are flipped, OR
+    // (b) no earn tiles remain unrevealed (orb already showed the board,
+    //     no point forcing the player to tap junk)
+    if (_phase === "play" && (_tiles.every(t => t.revealed) || _noEarnersLeft())) {
+      _scheduleRenewal();
+    }
+  }
+
+  // ── Renewal ────────────────────────────────────────
+  async function _scheduleRenewal() {
+    _phase = "renewing";
+    _wave++;
+
+    await sleep(500);
+    if (_phase !== "renewing") return;
+
+    _setStatus(`<div class="paer-phase-badge shuffle-badge"><i class="bi bi-arrow-repeat"></i> WAVE ${_wave + 1} — RESHUFFLING…</div>`);
+    cls.add(el("paer-grid"), "shuffling");
+
+    const gridEl = el("paer-grid");
+    if (gridEl) {
+      [...gridEl.querySelectorAll(".paer-tile")].forEach((b, i) => {
+        setTimeout(() => {
+          b.className = "paer-tile resetting";
+          b.innerHTML = `<span class="paer-tile-back">❓</span>`;
+          b.disabled  = true;
+        }, i * 18);
+      });
+    }
+
+    await sleep(550 + 25 * 25);
+
+    _tiles = _buildTiles(_wave);
+    await sleep(300);
+
+    cls.remove(el("paer-grid"), "shuffling");
+    _phase = "play";
+    _renderGrid(true);
+    _setStatus(`<div class="paer-phase-badge play-badge wave-badge"><i class="bi bi-hand-index-fill"></i> WAVE ${_wave + 1} — TAP TILES!</div>`);
+    _renderPowerBar();
+  }
+
+  // ── Gift system ────────────────────────────────────
+  function _collectGift() {
+    const options = [100, 200, 300, 400, 500];
+    const coins   = options[Math.floor(Math.random() * options.length)];
+    const id      = ++_giftId;
+    _gifts.push({ id, coins, opened: false });
+    _renderGiftTray();
+    Toast.show("🎁 Gift collected! Open after the vault seals.", "win", 3000);
+  }
+
+  function _renderGiftTray() {
+    const tray = el("paer-gift-tray"); if (!tray) return;
+    if (_gifts.length === 0) { cls.add(tray, "hidden"); tray.innerHTML = ""; return; }
+    cls.remove(tray, "hidden");
+    const isPlaying = _phase === "play" || _phase === "renewing" || _phase === "preview";
+    tray.innerHTML = `
+      <span class="pgt-label"><i class="bi bi-gift-fill"></i> GIFTS</span>
+      <div class="pgt-boxes" id="pgt-boxes"></div>`;
+    const boxes = el("pgt-boxes");
+    _gifts.forEach(g => {
+      const box = document.createElement("button");
+      box.className  = "pgt-box" + (g.opened ? " opened" : " sealed");
+      box.dataset.id = g.id;
+      box.disabled   = g.opened || isPlaying;
+      box.innerHTML  = g.opened
+        ? `<span>🎁</span><span class="pgt-val">🪙${g.coins}</span>`
+        : `<span>🎁</span><span class="pgt-val">${isPlaying ? "⏳" : "TAP!"}</span>`;
+      box.addEventListener("click", () => _openGift(g.id));
+      boxes.appendChild(box);
+    });
+  }
+
+  function _openGift(id) {
+    if (_phase === "play" || _phase === "renewing" || _phase === "preview") {
+      Toast.show("Open gifts after the vault seals!", "info", 2000);
+      return;
+    }
+    const gift = _gifts.find(g => g.id === id);
+    if (!gift || gift.opened) return;
+    gift.opened = true;
+    Coins.add(gift.coins);
+    _refreshCoins();
+    Toast.show(`🎁 Gift opened — +${gift.coins} coins!`, "win", 3500);
+    _renderGiftTray();
+  }
+
+  // ── Earn popup ─────────────────────────────────────
+  function _showPopup(text, cls_) {
+    const wrap = el("paer-popup-layer"); if (!wrap) return;
+    const popup = document.createElement("div");
+    popup.className = `paer-earn-popup ${cls_}`;
+    popup.textContent = text;
+    wrap.appendChild(popup);
+    setTimeout(() => popup.remove(), 1300);
+  }
+
+  // ── Time up ────────────────────────────────────────
+// ── Time up ────────────────────────────────────────
+  function _timeUp() {
+    if (_phase === "done") return;
+    _stopTimer();
+    _phase     = "done";
+    _freezeSec = 0;
+    _starSec   = 0;
+    _starMulti = 1;
+    _renderPowerBar();
+
+    _tiles.forEach(t => { t.revealed = true; });
+    _renderGrid(false);
+    _renderGiftTray();
+
+    if (State.user && State.userData) {
+      const newBest = Math.max(State.userData.bestWin || 0, _bank);
+      State.userData.bestWin = newBest;
+      DB.updateUser(State.user.uid, { bestWin: newBest }).catch(() => {});
+    }
+
+    _showResultModal();
+    Toast.show(`Vault sealed! Bank: ₱${fmt.coins(_bank)}`, "info", 3500);
+  }
+
+  // ── Result modal ───────────────────────────────────
+  function _showResultModal() {
+    const modal = el("paer-result-modal"); if (!modal) return;
+    const giftCount = _gifts.filter(g => !g.opened).length;
+
+    el("prm-bank").textContent  = `₱${fmt.coins(_bank)}`;
+    el("prm-wave").textContent  = `Wave ${_wave + 1}`;
+
+    const giftNote = el("prm-gift-note");
+    if (giftNote) {
+      giftNote.innerHTML = giftCount > 0
+        ? `<i class="bi bi-gift-fill"></i> <strong>${giftCount}</strong> gift${giftCount > 1 ? "s" : ""} waiting — close and tap them above!`
+        : "";
+      giftNote.className = giftCount > 0 ? "prm-gift-note visible" : "prm-gift-note";
+    }
+
+    cls.remove(modal, "hidden");
+    requestAnimationFrame(() => requestAnimationFrame(() => cls.add(modal, "visible")));
+  }
+
+  function _closeResultModal() {
+    const modal = el("paer-result-modal"); if (!modal) return;
+    cls.remove(modal, "visible");
+    modal.addEventListener("transitionend", () => {
+      if (!cls.has(modal, "visible")) cls.add(modal, "hidden");
+    }, { once: true });
+  }
+
+  // ── Game start sequence ────────────────────────────
+  async function _startGame() {
+    if (Coins.get() < PAER_COST) { Toast.show("Not enough coins!", "loss"); return; }
+    const btn = el("btn-paer-start");
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> OPENING…`; }
+
+    await Coins.deduct(PAER_COST);
+    _refreshCoins();
+
+    _wave   = 0;
+    _gifts  = [];
+    _giftId = 0;
+    _freezeSec = 0;
+    _starSec   = 0;
+    _orbActive = false;
+    _tiles  = _buildTiles(0);
+    _phase  = "preview";
+
+    cls.add(el("paer-start-wrap"),    "hidden");
+    cls.remove(el("paer-grid-wrap"),  "hidden");
+    cls.remove(el("paer-timer-wrap"), "hidden");
+    cls.remove(el("paer-power-bar"),  "hidden");
+    _renderGiftTray();
+    _renderPowerBar();
+    _setStatus(`<div class="paer-phase-badge preview-badge"><i class="bi bi-eye-fill"></i> MEMORISE THE VAULT</div>`);
+
+    // Reveal all for PAER_REVEAL_MS
+    _renderGrid(false);
+    const gridEl = el("paer-grid");
+    if (gridEl) {
+      _tiles.forEach(t => {
+        const def = TILE_DEFS[t.typeIdx];
+        const b   = gridEl.querySelector(`[data-id="${t.id}"]`);
+        if (b) {
+          b.className = `paer-tile revealed ${def.cls}`;
+          b.innerHTML = `<span class="paer-tile-emoji">${def.emoji}</span>${_tileSubLabel(def)}`;
+          b.disabled  = true;
+        }
+      });
+    }
+
+    await sleep(PAER_REVEAL_MS);
+
+    // Flip all back + shuffle
+    _tiles.forEach(t => { t.revealed = false; });
+    _renderGrid(false);
+    _setStatus(`<div class="paer-phase-badge shuffle-badge"><i class="bi bi-arrow-repeat"></i> SHUFFLING…</div>`);
+    cls.add(el("paer-grid"), "shuffling");
+
+    await sleep(PAER_SHUFFLE_MS);
+
+    const idxArr = _tiles.map(t => t.typeIdx);
+    for (let i = idxArr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [idxArr[i], idxArr[j]] = [idxArr[j], idxArr[i]];
+    }
+    _tiles.forEach((t, i) => { t.typeIdx = idxArr[i]; });
+    cls.remove(el("paer-grid"), "shuffling");
+
+    await sleep(300);
+
+    _phase = "play";
+    _renderGrid(true);
+    _setStatus(`<div class="paer-phase-badge play-badge"><i class="bi bi-hand-index-fill"></i> WAVE 1 — TAP TILES!</div>`);
+    _startTimer();
+
+    if (btn) {
+      btn.disabled  = false;
+      btn.innerHTML = `<i class="bi bi-lightning-charge-fill"></i> ENTER VAULT — <i class="bi bi-coin"></i> 5`;
+    }
+  }
+
+  // ── Reset to idle ──────────────────────────────────
+function _resetToIdle() {
+    _stopTimer();
+    _phase     = "idle";
+    _wave      = 0;
+    _tiles     = [];
+    _gifts     = [];
+    _giftId    = 0;
+    _freezeSec = 0;
+    _starSec   = 0;
+    _starMulti = 1;
+    _orbActive = false;
+    _closeResultModal();
+    cls.remove(el("paer-start-wrap"),   "hidden");
+    cls.add(el("paer-grid-wrap"),       "hidden");
+    cls.add(el("paer-timer-wrap"),      "hidden");
+    cls.add(el("paer-power-bar"),       "hidden");
+    _setStatus("");
+    _refreshCoins();
+    _refreshBank();
+    _renderGiftTray();
+    _renderPowerBar();
+  }
+  // ── Cash out ───────────────────────────────────────
+  function _cashout(needed, coinsGained) {
+    if (_bank < needed) return;
+    _bank -= needed;
+    _refreshBank();
+    Coins.add(coinsGained);
+    _refreshCoins();
+    Toast.show(`+${coinsGained} coins from vault bank!`, "win", 3000);
+  }
+
+  // ── How-to modal ───────────────────────────────────
+  function _showHowTo() {
+    const m = el("paer-howto-modal"); if (!m) return;
+    cls.remove(m, "hidden");
+    requestAnimationFrame(() => requestAnimationFrame(() => cls.add(m, "visible")));
+  }
+  function _closeHowTo() {
+    const m = el("paer-howto-modal"); if (!m) return;
+    cls.remove(m, "visible");
+    m.addEventListener("transitionend", () => {
+      if (!cls.has(m, "visible")) cls.add(m, "hidden");
+    }, { once: true });
+  }
+
+  // ── Cash-out accordion ─────────────────────────────
+  function _initAccordion() {
+    const toggle = el("btn-paer-cashout-toggle");
+    const body   = el("paer-cashout-body");
+    const chev   = el("pca-chevron");
+    if (!toggle || !body) return;
+    const fresh = toggle.cloneNode(true);
+    toggle.parentNode.replaceChild(fresh, toggle);
+    fresh.addEventListener("click", () => {
+      const open = !cls.has(body, "hidden");
+      cls.toggle(body, "hidden", open);
+      fresh.setAttribute("aria-expanded", String(!open));
+      if (chev) chev.style.transform = open ? "" : "rotate(180deg)";
+    });
+  }
+
+  // ── Open overlay ───────────────────────────────────
+  function open() {
+    cls.remove(el("overlay-paer"), "hidden");
+    _bank      = 0;
+    _gifts     = [];
+    _giftId    = 0;
+    _freezeSec = 0;
+    _starSec   = 0;
+    _starMulti = 1;
+    _orbActive = false;
+    _resetToIdle();
+    _initAccordion();
+    if (!el("paer-popup-layer")) {
+      const lay = document.createElement("div");
+      lay.id        = "paer-popup-layer";
+      lay.className = "paer-popup-layer";
+      el("overlay-paer")?.appendChild(lay);
+    }
+    _showHowTo();
+  }
+
+  // ── Boot init ──────────────────────────────────────
+  function init() {
+    el("open-paer")?.addEventListener("click", open);
+    el("back-paer")?.addEventListener("click", () => {
+      _stopTimer();
+      cls.add(el("overlay-paer"), "hidden");
+      const m = el("paer-howto-modal");
+      if (m) { cls.remove(m, "visible"); cls.add(m, "hidden"); }
+      const r = el("paer-result-modal");
+      if (r) { cls.remove(r, "visible"); cls.add(r, "hidden"); }
+    });
+    el("btn-paer-start")?.addEventListener("click", _startGame);
+    el("btn-paer-howto")?.addEventListener("click", _showHowTo);
+    el("btn-paer-howto-close")?.addEventListener("click", _closeHowTo);
+    el("paer-howto-modal")?.addEventListener("click", e => {
+      if (e.target.id === "paer-howto-modal") _closeHowTo();
+    });
+    el("btn-prm-close")?.addEventListener("click", _closeResultModal);
+    el("btn-prm-again")?.addEventListener("click", () => { _closeResultModal(); setTimeout(_resetToIdle, 320); });
+    el("btn-prm-close-bottom")?.addEventListener("click", _closeResultModal);
+    el("paer-result-modal")?.addEventListener("click", e => {
+      if (e.target.id === "paer-result-modal") _closeResultModal();
+    });
+  }
+
+  return { init, open };
+})();
 
 // ═══════════════════════════════════════════════════
 //  SOUND MODULE
@@ -1468,10 +2303,11 @@ const Auth = {
     State.user = State.userData = null;
     Daily.stop();
     ProfilePage.reset();
+    DashPage.reset();
+    Cache.clear();
     cls.add($("overlay-fruit"),   "hidden");
     cls.add($("overlay-lucky"),   "hidden");
     cls.add($("overlay-capture"), "hidden");
-    // Also hide modal
     const modal = $("capture-howto-modal");
     if (modal) { cls.remove(modal, "visible"); cls.add(modal, "hidden"); }
     cls.add($("app"), "hidden");
@@ -1494,6 +2330,7 @@ const boot = () => {
   FruitGame.init();
   LuckyGame.init();
   CaptureGame.init();
+  PaerGame.init();
   onAuthStateChanged(auth, (user) => {
     if (user) {
       Auth.onSignedIn(user);
