@@ -89,7 +89,7 @@ const HISTORY_LIMIT = 5; // items shown & fetched from Firestore
 //  PÆIR A PÆRA CONSTANTS
 // ═══════════════════════════════════════════════════
 const PAER_COST           = 5;
-const PAER_REVEAL_MS      = 200;
+const PAER_REVEAL_MS      = 1500;
 const PAER_SHUFFLE_MS     = 1800;
 const PAER_DURATION_SEC   = 120;
 const PAER_CASHOUT_BLOCK  = 5000;
@@ -1573,46 +1573,57 @@ const PaerGame = (() => {
   ];
 
   // ── Pool builder (wave-aware) ──────────────────────
-  function _buildPool(wave) {
-    const pool = [];
-
-    // Treasure — thins each wave
-    const diamonds = Math.max(0, 2 - wave);
-    const golds    = Math.max(0, 5 - wave * 2);
-    const cash     = Math.max(0, 9 - wave);
-    for (let i = 0; i < diamonds; i++) pool.push(0);
-    for (let i = 0; i < golds;    i++) pool.push(1);
-    for (let i = 0; i < cash;     i++) pool.push(2);
-
-    // 🎁 gift: 1% chance per renewal wave (wave ≥ 1)
-    if (wave >= 1 && Math.random() < 0.01) pool.push(5);
-
-    // Power-ups (wave ≥ 1, random 1 each per wave)
-    if (wave >= 1) {
-      if (Math.random() < 0.25) pool.push(6); // ❄️
-      if (Math.random() < 0.20) pool.push(7); // ⭐
-      if (Math.random() < 0.18) pool.push(8); // 🧿
-      if (Math.random() < 0.08) pool.push(9); // 🌟 rarer than ⭐
-    }
-
-    // 🔥 grows with wave, fills remainder
-    const fires = wave >= 1 ? Math.min(8, wave * 3) : 0;
-    const needed = 25 - pool.length;
-    const bombs  = Math.max(0, needed - fires);
-    for (let i = 0; i < bombs; i++) pool.push(3);
-    for (let i = 0; i < fires; i++) pool.push(4);
-
-    // Pad / trim to exactly 25
-    while (pool.length < 25) pool.push(3);
-    pool.length = 25;
-
-    // Fisher-Yates shuffle
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    return pool;
+function _buildPool(wave) {
+  const pool = [];
+  
+  // ── Treasures: scale DOWN but never below hard minimums ──
+  // Wave 0:  2💎  5💰  9💵
+  // Wave 1:  2💎  4💰  7💵
+  // Wave 2:  1💎  3💰  5💵
+  // Wave 3+: 1💎  2💰  3💵  ← floor, never goes lower
+  const diamonds = wave === 0 ? 2 : 1;
+  const golds = Math.max(2, 5 - wave);
+  const cash = Math.max(3, 9 - wave * 2);
+  for (let i = 0; i < diamonds; i++) pool.push(0); // 💎
+  for (let i = 0; i < golds; i++) pool.push(1); // 💰
+  for (let i = 0; i < cash; i++) pool.push(2); // 💵
+  
+  // ── 🎁 Gift: 1% chance, wave 1+ ──
+  if (wave >= 1 && Math.random() < 0.01) pool.push(5);
+  
+  // ── Power-ups: scale UP with wave (more exciting as it gets harder) ──
+  // Wave 0: none  Wave 1: low chance  Wave 3+: reliable
+  if (wave >= 1) {
+    const wf = Math.min(wave, 4); // factor caps at 4 so chances plateau
+    if (Math.random() < 0.15 + wf * 0.06) pool.push(6); // ❄️  max ~39%
+    if (Math.random() < 0.12 + wf * 0.05) pool.push(7); // ⭐  max ~32%
+    if (Math.random() < 0.10 + wf * 0.05) pool.push(8); // 🧿  max ~30%
+    if (Math.random() < 0.04 + wf * 0.02) pool.push(9); // 🌟  max ~12%
   }
+  
+  // ── Hazards: 🔥 grows with wave but is capped so it can't crowd out ──
+  // Slots remaining after treasures + power-ups are split between 💣 and 🔥
+  // 🔥 share grows each wave but never exceeds half the remaining slots
+  const slotsLeft = 25 - pool.length;
+  const fireShare = wave === 0 ?
+    0 :
+    Math.min(Math.floor(slotsLeft / 2), wave * 2); // max half the remainder
+  const bombShare = slotsLeft - fireShare;
+  
+  for (let i = 0; i < bombShare; i++) pool.push(3); // 💣
+  for (let i = 0; i < fireShare; i++) pool.push(4); // 🔥
+  
+  // Safety: pad/trim to exactly 25 (shouldn't be needed but defensive)
+  while (pool.length < 25) pool.push(3);
+  pool.length = 25;
+  
+  // Fisher-Yates shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool;
+}
 
   function _buildTiles(wave) {
     return _buildPool(wave).map((typeIdx, id) => ({ id, typeIdx, revealed: false }));
