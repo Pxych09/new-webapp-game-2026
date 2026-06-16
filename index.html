@@ -308,11 +308,16 @@
        FRUIT SPIN OVERLAY
   ═══════════════════════════════════════════════ -->
   <div id="overlay-fruit" class="game-overlay hidden" role="dialog" aria-label="Fruit Spin game">
-    <div class="overlay-topbar">
-      <button class="overlay-back" id="back-fruit"><i class="bi bi-chevron-left"></i> Back</button>
-      <span class="overlay-title">🎰 FRUIT SPIN</span>
-      <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="fruit-coins-display" class="coin-val">0</span></div>
-    </div>
+<div class="overlay-topbar">
+  <button class="overlay-back" id="back-fruit"><i class="bi bi-chevron-left"></i> Back</button>
+  <span class="overlay-title">🎰 FRUIT SPIN</span>
+  <div class="overlay-topbar-right">
+    <button id="btn-fruit-mute" class="btn-mute-music" aria-label="Toggle music" title="Toggle music">
+      <i class="bi bi-music-note-beamed" id="fruit-mute-icon"></i>
+    </button>
+    <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="fruit-coins-display" class="coin-val">0</span></div>
+  </div>
+</div>
     <div class="fruit-game-body">
       <div id="fruit-result" class="fruit-result hidden" role="status" aria-live="polite"></div>
       <div class="grid-wrap"><div id="fruit-grid" class="fruit-grid"></div></div>
@@ -332,11 +337,16 @@
        LUCKY 777 OVERLAY
   ═══════════════════════════════════════════════ -->
   <div id="overlay-lucky" class="game-overlay hidden" role="dialog" aria-label="Lucky 777 slot game">
-    <div class="overlay-topbar">
-      <button class="overlay-back" id="back-lucky"><i class="bi bi-chevron-left"></i> Back</button>
-      <span class="overlay-title">7️⃣ LUCKY 777</span>
-      <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="lucky-coins-display" class="coin-val">0</span></div>
-    </div>
+<div class="overlay-topbar">
+  <button class="overlay-back" id="back-lucky"><i class="bi bi-chevron-left"></i> Back</button>
+  <span class="overlay-title">7️⃣ LUCKY 777</span>
+  <div class="overlay-topbar-right">
+    <button id="btn-lucky-mute" class="btn-mute-music" aria-label="Toggle music" title="Toggle music">
+      <i class="bi bi-music-note-beamed" id="lucky-mute-icon"></i>
+    </button>
+    <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="lucky-coins-display" class="coin-val">0</span></div>
+  </div>
+</div>
     <div class="lucky-game-body">
       <div class="slot-machine">
         <div class="slot-screen">
@@ -384,12 +394,15 @@
         <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png" alt="" class="topbar-ball-icon" aria-hidden="true" />
         CAPTURE A POKÉMON
       </span>
-      <div class="capture-topbar-right">
-        <button id="btn-capture-howto" class="btn-capture-info" aria-label="How to play">
-          <i class="bi bi-question-circle-fill"></i>
-        </button>
-        <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="capture-coins-display" class="coin-val">0</span></div>
-      </div>
+       <div class="capture-topbar-right">
+  <button id="btn-capture-mute" class="btn-capture-info" aria-label="Toggle music" title="Toggle music">
+    <i class="bi bi-music-note-beamed" id="capture-mute-icon"></i>
+  </button>
+  <button id="btn-capture-howto" class="btn-capture-info" aria-label="How to play">
+    <i class="bi bi-question-circle-fill"></i>
+  </button>
+  <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="capture-coins-display" class="coin-val">0</span></div>
+</div>
     </div>
 
     <!-- Tier switcher tabs -->
@@ -430,8 +443,31 @@
         </button>
       </div>
 
-    </div>
-  </div><!-- /overlay-capture -->
+<!-- ── Trading Plaza ── -->
+<div class="tp-section">
+  <div class="tp-header-row">
+    <h3 class="tp-title">
+      <i class="bi bi-shop-window"></i> TRADING PLAZA
+      <span class="tp-title-sub">Buy &amp; sell Pokémon</span>
+    </h3>
+    <button id="btn-tp-sell" class="tp-sell-btn">
+      <i class="bi bi-tag-fill"></i> SELL
+    </button>
+  </div>
+  <div id="tp-listings" class="tp-listings"></div>
+</div>
+
+<!-- ── Pokémon Masters ── -->
+<div class="pm-section">
+  <h3 class="pm-title">
+    <i class="bi bi-trophy-fill"></i> POKÉMON MASTERS
+    <span class="pm-title-sub">Top trainers by collection</span>
+  </h3>
+  <div id="pm-list" class="pm-list"></div>
+</div>
+
+</div>
+</div><!-- /overlay-capture -->
 
   <!-- ═══════════════════════════════════════════════
        CAPTURE HOW TO PLAY MODAL
@@ -508,12 +544,15 @@
     <div class="overlay-topbar paer-topbar">
       <button class="overlay-back" id="back-paer"><i class="bi bi-chevron-left"></i> Back</button>
       <span class="overlay-title paer-title">💎 PÆIR A PÆRA</span>
-      <div class="paer-topbar-right">
-        <button id="btn-paer-howto" class="btn-paer-info" aria-label="How to play">
-          <i class="bi bi-question-circle-fill"></i>
-        </button>
-        <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="paer-coins-display" class="coin-val">0</span></div>
-      </div>
+<div class="paer-topbar-right">
+  <button id="btn-paer-mute" class="btn-paer-info" aria-label="Toggle music" title="Toggle music">
+    <i class="bi bi-music-note-beamed" id="paer-mute-icon"></i>
+  </button>
+  <button id="btn-paer-howto" class="btn-paer-info" aria-label="How to play">
+    <i class="bi bi-question-circle-fill"></i>
+  </button>
+  <div class="overlay-coins" title="Current coins"><i class="bi bi-coin"></i><span id="paer-coins-display" class="coin-val">0</span></div>
+</div>
     </div>
 
     <div class="paer-game-body">
@@ -567,10 +606,14 @@
           <div class="paer-prize-pill orb"><span>🧿</span><div><b>W2+</b><small>Peek 2s</small></div></div>
           <div class="paer-prize-pill superstar"><span>🌟</span><div><b>W2+</b><small>×4 25s</small></div></div>
         </div>
-        <button id="btn-paer-start" class="btn-paer-start">
-          <i class="bi bi-lightning-charge-fill"></i> ENTER VAULT — <i class="bi bi-coin"></i> 5
-        </button>
-      </div>
+<button id="btn-paer-start" class="btn-paer-start">
+  <i class="bi bi-lightning-charge-fill"></i> ENTER VAULT — <i class="bi bi-coin"></i> 50
+</button>
+<div class="paer-cost-note">
+  <i class="bi bi-info-circle"></i>
+  Cost doubles each run · resets daily
+</div>
+</div>
 
       <!-- Cash-out accordion -->
       <div class="paer-cashout-accordion" id="paer-cashout-accordion">
@@ -713,11 +756,14 @@
       <!-- Gift note -->
       <div id="prm-gift-note" class="prm-gift-note"></div>
       
+      <!-- Next cost note -->
+      <div id="prm-reset-note" class="prm-reset-note"></div>
+
       <!-- Cashout reminder -->
-      <div class="prm-hint">
-        <i class="bi bi-info-circle"></i>
-        Close this and use the <strong>CASH OUT</strong> accordion below the board to convert your bank to coins.
-      </div>
+    <div class="prm-hint">
+  <i class="bi bi-info-circle"></i>
+  Close this and use the <strong>CASH OUT</strong> accordion below the board to convert your bank to coins.
+</div>
     </div>
     
     <div class="paer-modal-footer prm-footer">
@@ -731,8 +777,62 @@
   </div>
 </div>
 <!-- ═══════════════════════════════════════════════
-       AVATAR CONFIRM MODAL
+       TRADING PLAZA — SELL MODAL
   ═══════════════════════════════════════════════ -->
+<div id="tp-sell-modal" class="paer-modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="capture-modal tp-modal">
+    <div class="tp-modal-header">
+      <div>
+        <h3 class="tp-modal-title"><i class="bi bi-tag-fill"></i> LIST A POKÉMON</h3>
+        <p class="tp-modal-subtitle">Choose from your collection and set a price</p>
+      </div>
+      <button id="tp-sell-close" class="prm-close-btn" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="tp-modal-body">
+      <div id="tp-sell-gallery" class="tp-sell-gallery"></div>
+      <div id="tp-sell-controls" class="tp-sell-controls"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+       TRADING PLAZA — BUY CONFIRM MODAL
+  ═══════════════════════════════════════════════ -->
+<div id="tp-buy-modal" class="paer-modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="capture-modal tp-buy-modal-inner">
+    <div class="tp-modal-header">
+      <div>
+        <h3 class="tp-modal-title"><i class="bi bi-bag-fill"></i> CONFIRM PURCHASE</h3>
+        <p class="tp-modal-subtitle">You are about to buy from the Trading Plaza</p>
+      </div>
+      <button id="tpbm-cancel" class="prm-close-btn" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="tpbm-body">
+      <div class="tpbm-pokemon-row">
+        <div class="tpbm-img-wrap">
+          <img id="tpbm-img" src="" alt="" class="tpbm-img" />
+        </div>
+        <div class="tpbm-info">
+          <p class="tpbm-name" id="tpbm-name"></p>
+          <p class="tpbm-detail">Sold by: <strong id="tpbm-seller"></strong></p>
+          <p class="tpbm-detail">Quantity: <strong id="tpbm-qty"></strong></p>
+          <p class="tpbm-price-line"><i class="bi bi-coin"></i> <strong id="tpbm-price"></strong> coins</p>
+        </div>
+      </div>
+      <p class="tpbm-confirm-text">Proceed with this purchase?</p>
+    </div>
+    <div class="tpbm-footer">
+      <button id="tpbm-confirm" class="btn-howto-close tpbm-confirm-btn">
+        <i class="bi bi-check-circle-fill"></i> YES, PURCHASE
+      </button>
+      <button id="tpbm-cancel-bottom" class="btn-prm-close-bottom">
+        <i class="bi bi-x-circle"></i> CANCEL
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ AVATAR CONFIRM MODAL ═══ -->
   <div id="avatar-confirm-modal" class="capture-modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Set avatar">
     <div class="capture-modal acm-modal">
       <div class="acm-header">
