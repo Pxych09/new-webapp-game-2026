@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -150,36 +151,31 @@
             collection of neon arcade games. Your progress and coins sync across all your devices.
           </p>
         </section>
-
         <section class="home-games">
-          <h3 class="section-label"><i class="bi bi-joystick"></i> GAMES</h3>
-          <div class="home-game-grid">
-            <div class="home-game-card" data-nav="games">
-              <div class="hgc-icon">🍒</div>
-              <div class="hgc-info">
-                <span class="hgc-name">FRUIT SPIN</span>
-                <span class="hgc-desc">Spin the border grid — land on fruit to collect coins</span>
-              </div>
-              <i class="bi bi-chevron-right hgc-arrow"></i>
-            </div>
-            <div class="home-game-card" data-nav="games">
-              <div class="hgc-icon">🎰</div>
-              <div class="hgc-info">
-                <span class="hgc-name">LUCKY 777</span>
-                <span class="hgc-desc">Classic 3-reel slot — match symbols to win big</span>
-              </div>
-              <i class="bi bi-chevron-right hgc-arrow"></i>
-            </div>
-            <div class="home-game-card" data-nav="games">
-              <div class="hgc-icon">🔴</div>
-              <div class="hgc-info">
-                <span class="hgc-name">CAPTURE A POKÉMON</span>
-                <span class="hgc-desc">Two tiers: catch common Pokémon daily or legendary ones weekly</span>
-              </div>
-              <i class="bi bi-chevron-right hgc-arrow"></i>
-            </div>
-          </div>
-        </section>
+  <h3 class="section-label"><i class="bi bi-joystick"></i> GAMES</h3>
+  <div class="home-game-pills">
+    <button class="hgp-btn" id="hgp-fruit">
+      <span class="hgp-icon">🍒</span>
+      <span class="hgp-name">FRUIT SPIN</span>
+      <span class="hgp-cost"><i class="bi bi-coin"></i>1</span>
+    </button>
+    <button class="hgp-btn" id="hgp-lucky">
+      <span class="hgp-icon">🎰</span>
+      <span class="hgp-name">LUCKY 777</span>
+      <span class="hgp-cost"><i class="bi bi-coin"></i>3</span>
+    </button>
+    <button class="hgp-btn" id="hgp-capture">
+      <span class="hgp-icon">🔴</span>
+      <span class="hgp-name">CAPTURE</span>
+      <span class="hgp-cost">FREE</span>
+    </button>
+    <button class="hgp-btn" id="hgp-paer">
+      <span class="hgp-icon">💎</span>
+      <span class="hgp-name">PÆIR</span>
+      <span class="hgp-cost"><i class="bi bi-coin"></i>50</span>
+    </button>
+  </div>
+</section>
       </div><!-- /page-home -->
 
       <!-- ═══ DASHBOARD ═══ -->
