@@ -525,8 +525,9 @@ const Daily = (() => {
     await DB.updateUser(State.user.uid, { lastClaimAt:now });
     await Coins.add(DAILY_REWARD, false);
     await DB.updateUser(State.user.uid, { coins:State.userData.coins });
+    Sound.dailyClaim();
     Toast.show(`+${DAILY_REWARD} daily coins claimed!`, "win", 3000);
-    render();
+render();
   };
   return { init:()=>render(), stop, render };
 })();
@@ -550,6 +551,12 @@ const Router = {
   document.querySelectorAll("[data-nav]").forEach(el =>
     el.addEventListener("click", () => this.go(el.dataset.nav)));
   $("topbar-avatar")?.addEventListener("click", () => this.go("profile"));
+
+    // Home quick-launch game pills
+    $("hgp-fruit")?.addEventListener("click",   () => { this.go("games"); FruitGame.open(); });
+    $("hgp-lucky")?.addEventListener("click",   () => { this.go("games"); LuckyGame.open(); });
+    $("hgp-capture")?.addEventListener("click", () => { this.go("games"); CaptureGame.open(); });
+    $("hgp-paer")?.addEventListener("click",    () => { this.go("games"); PaerGame.open(); });
   },
 };
 
@@ -1029,14 +1036,15 @@ const FruitGame = {
   init() {
     FruitGrid.render();
     $("btn-fruit-spin")?.addEventListener("click", () => this.spin());
-    $("back-fruit")?.addEventListener("click",    () => { FruitMusic.stop(); cls.add($("overlay-fruit"),"hidden"); });
+    $("back-fruit")?.addEventListener("click",    () => { FruitMusic.stop(); cls.add($("overlay-fruit"),"hidden"); HomeMusic.play(); });
     $("btn-fruit-mute")?.addEventListener("click", () => _toggleMute(FruitMusic, "fruit-mute-icon"));
     $("open-fruit")?.addEventListener("click",    () => this.open());
   },
   open() {
     cls.remove($("overlay-fruit"),"hidden"); FruitGrid.render(); FruitGrid.clearLit();
     cls.add($("fruit-result"),"hidden"); this._refreshCoins(); this._loadHistory();
-    FruitMusic.play();
+    HomeMusic.stop();
+FruitMusic.play();
   },
   _refreshCoins() { const el=$("fruit-coins-display"); if(el) el.textContent=fmt.coins(Coins.get()); },
 
@@ -1119,12 +1127,13 @@ const FruitGame = {
 const LuckyGame = {
   init() {
     $("btn-lucky-pull")?.addEventListener("click", () => this.pull());
-    $("back-lucky")?.addEventListener("click",     () => { LuckyMusic.stop(); cls.add($("overlay-lucky"),"hidden"); });
+    $("back-lucky")?.addEventListener("click",     () => { LuckyMusic.stop(); cls.add($("overlay-lucky"),"hidden"); HomeMusic.play(); });
     $("btn-lucky-mute")?.addEventListener("click", () => _toggleMute(LuckyMusic, "lucky-mute-icon"));
     $("open-lucky")?.addEventListener("click",     () => this.open());
     this._buildReels();
   },
-  open() { cls.remove($("overlay-lucky"),"hidden"); cls.add($("lucky-result"),"hidden"); this._refreshCoins(); this._loadHistory(); this._resetReels(); LuckyMusic.play(); },
+  open() { cls.remove($("overlay-lucky"),"hidden"); cls.add($("lucky-result"),"hidden"); this._refreshCoins(); this._loadHistory(); this._resetReels(); HomeMusic.stop();
+LuckyMusic.play(); },
   _refreshCoins() { const el=$("lucky-coins-display"); if(el) el.textContent=fmt.coins(Coins.get()); },
   _buildReels() {
     for(let r=0;r<3;r++){
@@ -1473,6 +1482,62 @@ const PaerMusic = _makeMusicPlayer({
     for (let b = 0; b < BARS; b += 4) {
       osc(1760, "sine", startT + b * BEAT, BEAT * 1.5, 0.03);
       osc(1318, "sine", startT + b * BEAT + BEAT, BEAT, 0.025);
+    }
+
+    return BARS * BEAT;
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  HOME / LOBBY MUSIC — warm retro ambient
+// ═══════════════════════════════════════════════════
+const HomeMusic = _makeMusicPlayer({
+  volume: 0.13,
+  buildLoop({ osc, startT }) {
+    // Warm C major — friendly, welcoming arcade lobby feel
+    const N = [130.8, 164.8, 196.0, 220.0, 261.6, 329.6, 392.0, 440.0, 523.3];
+    const BEAT = 0.55; // ~109bpm — relaxed but alive
+    const BARS = 16;
+
+    // Slow pad chords — held long, soft
+    const PADS = [[0,2,4],[2,4,6],[1,3,5],[0,2,5]];
+    PADS.forEach((chord, ci) => {
+      const t = startT + ci * 4 * BEAT;
+      chord.forEach(ni => {
+        osc(N[ni],   "sine",     t, 4 * BEAT * 0.92, 0.18);
+        osc(N[ni]*2, "sine",     t, 4 * BEAT * 0.88, 0.06);
+        osc(N[ni],   "triangle", t, 4 * BEAT * 0.90, 0.07, 4);
+      });
+    });
+
+    // Gentle bass walk
+    const BASS = [0,0,2,2, 1,1,0,0, 2,2,4,4, 0,0,1,2];
+    BASS.forEach((ni, b) => {
+      osc(N[ni]/2, "sine", startT + b * BEAT, BEAT * 0.8, 0.22);
+    });
+
+    // Simple melody — cheerful, singable
+    const MEL = [4,5,6,7,6,5,4,2, 4,6,7,8,7,6,5,4];
+    MEL.forEach((ni, b) => {
+      osc(N[ni], "sine",     startT + b * BEAT, BEAT * 0.78, 0.26);
+      osc(N[ni], "triangle", startT + b * BEAT, BEAT * 0.60, 0.08);
+    });
+
+    // Soft arpeggio layer — sparkle effect
+    const ARP = [4,6,7,6, 4,6,8,6, 5,7,8,7, 4,5,6,7];
+    ARP.forEach((ni, b) => {
+      osc(N[ni]*2, "sine", startT + b * BEAT * 0.5, BEAT * 0.4, 0.08);
+    });
+
+    // Light kick every 4 beats
+    for (let b = 0; b < BARS; b += 4) {
+      osc(80, "sine", startT + b * BEAT, 0.16, 0.28);
+      osc(55, "sine", startT + b * BEAT, 0.20, 0.16);
+    }
+
+    // Soft hi-hat
+    for (let b = 0; b < BARS; b += 2) {
+      osc(3200, "square", startT + b * BEAT, 0.03, 0.015);
     }
 
     return BARS * BEAT;
@@ -2088,7 +2153,7 @@ const CaptureGame = {
 
   init() {
     $("open-capture")?.addEventListener("click",        () => this.open());
-    $("back-capture")?.addEventListener("click",        () => { CaptureMusic.stop(); this._closeOverlay(); });
+    $("back-capture")?.addEventListener("click",        () => { CaptureMusic.stop(); this._closeOverlay(); HomeMusic.play(); });
     $("btn-capture-again")?.addEventListener("click",   () => this._resetForNewThrow());
     $("btn-capture-mute")?.addEventListener("click", () => {
       const icon = $("capture-mute-icon");
@@ -2125,6 +2190,7 @@ const CaptureGame = {
   this._showHowToModal();
   PokemonMasters.render();
 TradinPlaza.render();
+HomeMusic.stop();
 CaptureMusic.play();
 },
 
@@ -3087,6 +3153,7 @@ function _showResultModal() {
 _renderGrid(true);
 _setStatus(`<div class="paer-phase-badge play-badge"><i class="bi bi-hand-index-fill"></i> WAVE 1 — TAP TILES!</div>`);
 _startTimer();
+HomeMusic.stop();
 PaerMusic.play();
 
     if (btn) {
@@ -3198,6 +3265,7 @@ function _refreshStartBtn() {
       _stopTimer();
       PaerMusic.stop();
       cls.add(el("overlay-paer"), "hidden");
+      HomeMusic.play();
       const m = el("paer-howto-modal");
       if (m) { cls.remove(m, "visible"); cls.add(m, "hidden"); }
       const r = el("paer-result-modal");
@@ -3251,6 +3319,29 @@ const Sound = (() => {
         },i*120));
       } catch{}
     },
+    dailyClaim: () => {
+      try {
+        const c = ctx();
+        // Ascending fanfare — 4 bright notes
+        [[523.3,0],[659.3,0.12],[783.9,0.24],[1046.5,0.38]].forEach(([f,delay]) => {
+          setTimeout(() => {
+            const o=c.createOscillator(), g=c.createGain();
+            o.type="sine"; o.frequency.value=f; g.gain.value=.22;
+            o.connect(g); g.connect(c.destination); o.start();
+            g.gain.exponentialRampToValueAtTime(0.001, c.currentTime+.45);
+            o.stop(c.currentTime+.5);
+          }, delay * 1000);
+        });
+        // Coin shimmer underneath
+        setTimeout(() => {
+          const o=c.createOscillator(), g=c.createGain();
+          o.type="triangle"; o.frequency.value=1800; g.gain.value=.10;
+          o.connect(g); g.connect(c.destination); o.start();
+          g.gain.exponentialRampToValueAtTime(0.001, c.currentTime+.6);
+          o.stop(c.currentTime+.65);
+        }, 500);
+      } catch{}
+    },
     jackpot:  () => {
       try {
         const c=ctx();
@@ -3290,6 +3381,7 @@ const Auth = {
     Daily.init();
     Router.init();
     Router.go("home");
+    HomeMusic.play();
     Screens.splashOut(() => {
       cls.remove($("screen-signin"),"active");
       cls.remove($("app"),"hidden");
@@ -3298,6 +3390,7 @@ const Auth = {
   onSignedOut() {
     State.user = State.userData = null;
     Daily.stop();
+    HomeMusic.stop();
     ProfilePage.reset();
     DashPage.reset();
     Cache.clear();
