@@ -3105,3 +3105,87 @@ a { color: var(--cyan); text-decoration: none; }
   flex-direction: column;
   overflow: hidden;
 }
+/* ═══════════════════════════════════════════════════
+   HOME — GAME PILLS (simplified quick launch)
+═══════════════════════════════════════════════════ */
+.home-game-pills {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.hgp-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--panel);
+  border: 1.5px solid var(--border-hi);
+  border-radius: var(--radius-lg);
+  padding: 18px 10px 14px;
+  cursor: pointer;
+  transition: all .2s;
+  position: relative;
+  overflow: hidden;
+}
+.hgp-btn::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 0%, rgba(0,245,228,0.06), transparent 70%);
+  opacity: 0; transition: opacity .2s;
+}
+.hgp-btn:hover { border-color: var(--cyan); transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,245,228,0.12); }
+.hgp-btn:hover::before { opacity: 1; }
+.hgp-btn:active { transform: scale(0.97); }
+
+.hgp-icon {
+  font-size: 2.2rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+  transition: transform .2s;
+}
+.hgp-btn:hover .hgp-icon { transform: scale(1.15); }
+
+.hgp-name {
+  font-family: var(--font-display);
+  font-size: .65rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  letter-spacing: 1.5px;
+  text-align: center;
+}
+
+.hgp-cost {
+  font-family: var(--font-mono);
+  font-size: .58rem;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(255,215,0,0.1);
+  border: 1px solid rgba(255,215,0,0.2);
+  border-radius: 50px;
+  padding: 2px 8px;
+  letter-spacing: .5px;
+}
+.hgp-cost .bi { font-size: .55rem; color: var(--gold); }
+
+/* Pill accent colours per game */
+#hgp-fruit   { border-color: rgba(255,45,142,0.35); }
+#hgp-fruit:hover { border-color: var(--magenta); box-shadow: 0 8px 24px rgba(255,45,142,0.15); }
+#hgp-fruit::before { background: radial-gradient(circle at 50% 0%, rgba(255,45,142,0.07), transparent 70%); }
+
+#hgp-lucky   { border-color: rgba(255,215,0,0.35); }
+#hgp-lucky:hover { border-color: var(--gold); box-shadow: 0 8px 24px rgba(255,215,0,0.15); }
+#hgp-lucky::before { background: radial-gradient(circle at 50% 0%, rgba(255,215,0,0.07), transparent 70%); }
+
+#hgp-capture { border-color: rgba(227,53,13,0.35); }
+#hgp-capture:hover { border-color: var(--poke-red); box-shadow: 0 8px 24px rgba(227,53,13,0.15); }
+#hgp-capture::before { background: radial-gradient(circle at 50% 0%, rgba(227,53,13,0.07), transparent 70%); }
+#hgp-capture .hgp-cost { color: var(--green); border-color: rgba(57,255,20,0.25); background: rgba(57,255,20,0.08); }
+
+#hgp-paer    { border-color: rgba(200,160,255,0.35); }
+#hgp-paer:hover { border-color: var(--paer); box-shadow: 0 8px 24px rgba(200,160,255,0.15); }
+#hgp-paer::before { background: radial-gradient(circle at 50% 0%, rgba(200,160,255,0.07), transparent 70%); }
+#hgp-paer .hgp-cost { color: var(--paer); border-color: rgba(200,160,255,0.25); background: rgba(200,160,255,0.08); }
