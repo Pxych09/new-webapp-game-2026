@@ -88,7 +88,7 @@ const HISTORY_LIMIT = 5; // items shown & fetched from Firestore
 // ═══════════════════════════════════════════════════
 //  PÆIR A PÆRA CONSTANTS
 // ═══════════════════════════════════════════════════
-const PAER_COST           = 5;
+const PAER_COST_BASE     = 50;
 const PAER_REVEAL_MS      = 1500;
 const PAER_SHUFFLE_MS     = 1800;
 const PAER_DURATION_SEC   = 120;
@@ -438,6 +438,23 @@ const DB = {
     const snap = await getDocs(q);
     return snap.docs.map(d => ({ uid:d.id, ...d.data() }));
   },
+  async getPokemonMasters(n = 10) {
+    const q = query(collection(db, "users"), orderBy("totalCaptures", "desc"), limit(n));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  },
+  async addTrade(data) {
+      return await addDoc(collection(db, "trades"), { ...data, createdAt: serverTimestamp(), status: "open" });
+    },
+    async getTrades(n = 30) {
+        const q = query(collection(db, "trades"), where("status", "==", "open"), orderBy("createdAt", "desc"), limit(n));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      },
+      async executeTrade(tradeId, buyerId, buyerName) {
+        const ref = doc(db, "trades", tradeId);
+        await updateDoc(ref, { status: "sold", buyerId, buyerName, soldAt: serverTimestamp() });
+      },
 };
 
 // ═══════════════════════════════════════════════════
@@ -713,21 +730,23 @@ const ProfilePage = {
 
     const currentAvatarId = parseAvatar(State.userData?.avatar)?.id;
 
-    const _makeCard = (p, isLegend) => {
-      const { id, name } = p;
-      const isActive = id === currentAvatarId;
-      const card = document.createElement("div");
-      card.className = "collection-card" + (isLegend ? " legendary-card" : "") + (isActive ? " avatar-active" : "");
-      card.innerHTML = `
+const _makeCard = (p, isLegend) => {
+    const { id, name } = p;
+    const isActive = id === currentAvatarId;
+    const cardCount = p.count || 1;
+    const card = document.createElement("div");
+    card.className = "collection-card" + (isLegend ? " legendary-card" : "") + (isActive ? " avatar-active" : "");
+    card.innerHTML = `
         <div class="collection-card-img-wrap">
           <img src="${POKE_ARTWORK_URL(id)}" alt="${name}" loading="lazy" class="collection-card-img" onerror="this.src='${POKE_SPRITE_URL(id)}'" />
         </div>
         ${isLegend  ? `<span class="collection-legend-badge"><i class="bi bi-gem-fill"></i></span>` : ""}
         ${isActive  ? `<span class="collection-avatar-badge"><i class="bi bi-person-fill"></i></span>` : ""}
+        ${cardCount > 1 ? `<span class="collection-count-badge">×${cardCount}</span>` : ""}
         <span class="collection-card-name">${name}</span>
         <span class="collection-card-id">#${String(id).padStart(3,"0")}</span>
         <span class="collection-hold-hint">Hold to set avatar</span>`;
-
+        
       // Long-press / hold detection (works mouse + touch)
       let holdTimer = null;
       const startHold = () => { holdTimer = setTimeout(() => this._promptAvatar(id, name), 600); };
@@ -1010,12 +1029,14 @@ const FruitGame = {
   init() {
     FruitGrid.render();
     $("btn-fruit-spin")?.addEventListener("click", () => this.spin());
-    $("back-fruit")?.addEventListener("click",    () => cls.add($("overlay-fruit"),"hidden"));
+    $("back-fruit")?.addEventListener("click",    () => { FruitMusic.stop(); cls.add($("overlay-fruit"),"hidden"); });
+    $("btn-fruit-mute")?.addEventListener("click", () => _toggleMute(FruitMusic, "fruit-mute-icon"));
     $("open-fruit")?.addEventListener("click",    () => this.open());
   },
   open() {
     cls.remove($("overlay-fruit"),"hidden"); FruitGrid.render(); FruitGrid.clearLit();
     cls.add($("fruit-result"),"hidden"); this._refreshCoins(); this._loadHistory();
+    FruitMusic.play();
   },
   _refreshCoins() { const el=$("fruit-coins-display"); if(el) el.textContent=fmt.coins(Coins.get()); },
 
@@ -1098,11 +1119,12 @@ const FruitGame = {
 const LuckyGame = {
   init() {
     $("btn-lucky-pull")?.addEventListener("click", () => this.pull());
-    $("back-lucky")?.addEventListener("click",     () => cls.add($("overlay-lucky"),"hidden"));
+    $("back-lucky")?.addEventListener("click",     () => { LuckyMusic.stop(); cls.add($("overlay-lucky"),"hidden"); });
+    $("btn-lucky-mute")?.addEventListener("click", () => _toggleMute(LuckyMusic, "lucky-mute-icon"));
     $("open-lucky")?.addEventListener("click",     () => this.open());
     this._buildReels();
   },
-  open() { cls.remove($("overlay-lucky"),"hidden"); cls.add($("lucky-result"),"hidden"); this._refreshCoins(); this._loadHistory(); this._resetReels(); },
+  open() { cls.remove($("overlay-lucky"),"hidden"); cls.add($("lucky-result"),"hidden"); this._refreshCoins(); this._loadHistory(); this._resetReels(); LuckyMusic.play(); },
   _refreshCoins() { const el=$("lucky-coins-display"); if(el) el.textContent=fmt.coins(Coins.get()); },
   _buildReels() {
     for(let r=0;r<3;r++){
@@ -1217,6 +1239,819 @@ const LuckyGame = {
 };
 
 // ═══════════════════════════════════════════════════
+//  ARCADE MUSIC FACTORY — shared builder
+// ═══════════════════════════════════════════════════
+function _makeMusicPlayer({ volume=0.18, buildLoop }) {
+  let _ctx        = null;
+  let _masterGain = null;
+  let _playing    = false;
+  let _nodes      = [];
+  let _loopHandle = null;
+
+  function _ensureCtx() {
+    if (_ctx) return;
+    _ctx = new (window.AudioContext || window.webkitAudioContext)();
+    _masterGain = _ctx.createGain();
+    _masterGain.gain.value = volume;
+    _masterGain.connect(_ctx.destination);
+  }
+
+  function _osc(freq, type, startT, dur, vol=1, detune=0) {
+    const o = _ctx.createOscillator();
+    const g = _ctx.createGain();
+    o.type = type; o.frequency.value = freq; o.detune.value = detune;
+    g.gain.setValueAtTime(0, startT);
+    g.gain.linearRampToValueAtTime(vol, startT + 0.02);
+    g.gain.setValueAtTime(vol, startT + dur - 0.06);
+    g.gain.linearRampToValueAtTime(0, startT + dur);
+    o.connect(g); g.connect(_masterGain);
+    o.start(startT); o.stop(startT + dur + 0.05);
+    _nodes.push(o);
+  }
+
+  function _schedule(startT) {
+    if (!_playing) return;
+    const loopDur = buildLoop({ ctx: _ctx, osc: _osc, masterGain: _masterGain, nodes: _nodes, startT });
+    _loopHandle = setTimeout(() => _schedule(startT + loopDur), (loopDur - 0.3) * 1000);
+  }
+
+  function play() {
+    if (_playing) return;
+    _ensureCtx();
+    if (_ctx.state === "suspended") _ctx.resume();
+    _playing = true;
+    _schedule(_ctx.currentTime + 0.1);
+  }
+
+  function stop() {
+    if (!_playing) return;
+    _playing = false;
+    clearTimeout(_loopHandle);
+    if (_masterGain) {
+      _masterGain.gain.setValueAtTime(_masterGain.gain.value, _ctx.currentTime);
+      _masterGain.gain.linearRampToValueAtTime(0, _ctx.currentTime + 0.6);
+    }
+    setTimeout(() => {
+      _nodes.forEach(n => { try { n.stop(); } catch(_) {} });
+      _nodes = [];
+      if (_masterGain) _masterGain.gain.value = volume;
+    }, 700);
+  }
+
+  function isPlaying() { return _playing; }
+  return { play, stop, isPlaying };
+}
+
+// ═══════════════════════════════════════════════════
+//  FRUIT SPIN MUSIC — bouncy carnival major scale
+// ═══════════════════════════════════════════════════
+const FruitMusic = _makeMusicPlayer({
+  volume: 0.16,
+  buildLoop({ osc, startT }) {
+    // C major pentatonic — bright, cheery
+    const N = [523.3, 587.3, 659.3, 783.9, 880, 1046.5]; // C5 D5 E5 G5 A5 C6
+    const BEAT = 0.22; // fast ~136bpm
+    const BARS = 16;
+
+    // Bouncy bassline — root + fifth alternating
+    const BASS = [261.6, 392, 261.6, 349.2, 261.6, 392, 329.6, 261.6];
+    BASS.forEach((f, i) => {
+      osc(f, "square", startT + i * BEAT * 2, BEAT * 1.6, 0.18);
+    });
+
+    // Melody — playful arpeggio pattern
+    const MEL = [0,2,4,5,4,2,1,0, 2,4,5,4,3,2,4,5];
+    MEL.forEach((ni, b) => {
+      osc(N[ni], "sine",     startT + b * BEAT, BEAT * 0.85, 0.38);
+      osc(N[ni], "triangle", startT + b * BEAT, BEAT * 0.85, 0.10);
+    });
+
+    // Staccato chord stabs on beats 0, 4, 8, 12
+    [0,4,8,12].forEach(b => {
+      osc(523.3, "square", startT + b * BEAT, BEAT * 0.3, 0.09);
+      osc(659.3, "square", startT + b * BEAT, BEAT * 0.3, 0.07);
+      osc(783.9, "square", startT + b * BEAT, BEAT * 0.3, 0.06);
+    });
+
+    // Hi-hat tick every beat
+    for (let b = 0; b < BARS; b++) {
+      osc(2400, "square", startT + b * BEAT, 0.03, 0.025);
+    }
+
+    // Kick on 0 and 8
+    [0, 8].forEach(b => {
+      osc(100, "sine", startT + b * BEAT, 0.14, 0.45);
+      osc(60,  "sine", startT + b * BEAT, 0.18, 0.25);
+    });
+
+    // Snare-like on 4 and 12
+    [4, 12].forEach(b => {
+      osc(200, "sawtooth", startT + b * BEAT, 0.06, 0.10);
+      osc(350, "square",   startT + b * BEAT, 0.05, 0.07);
+    });
+
+    return BARS * BEAT;
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  LUCKY 777 MUSIC — smoky jazz Vegas lounge
+// ═══════════════════════════════════════════════════
+const LuckyMusic = _makeMusicPlayer({
+  volume: 0.15,
+  buildLoop({ osc, startT }) {
+    // Jazz-flavored — dominant 7th chords, swing feel
+    // Bb7 Eb7 F7 Bb7 (classic blues turnaround)
+    const BEAT   = 0.38; // ~79bpm — lazy swing
+    const SWING  = BEAT * 0.62; // swung 8th = long
+
+    // Chord voicings [root, 3rd, 5th, 7th] in Hz
+    const CHORDS = [
+      [233.1, 293.7, 349.2, 415.3],   // Bb7
+      [311.1, 392.0, 466.2, 554.4],   // Eb7
+      [349.2, 440.0, 523.3, 622.3],   // F7
+      [233.1, 293.7, 349.2, 415.3],   // Bb7
+    ];
+
+    // Comp chords — short stabs on beat 2 & 4 of each bar (swing)
+    CHORDS.forEach((chord, ci) => {
+      const barT = startT + ci * 4 * BEAT;
+      [1, 3].forEach(beat => {
+        chord.forEach(f => {
+          osc(f,   "sine",     barT + beat * BEAT, BEAT * 0.5, 0.14);
+          osc(f/2, "triangle", barT + beat * BEAT, BEAT * 0.5, 0.08);
+        });
+      });
+    });
+
+    // Walking bass — quarter notes with chromatic approach
+    const BASS_PAT = [
+      233.1,246.9,261.6,246.9,
+      311.1,329.6,311.1,293.7,
+      349.2,370.0,349.2,329.6,
+      233.1,220.0,246.9,233.1,
+    ];
+    BASS_PAT.forEach((f, b) => {
+      osc(f, "sine",   startT + b * BEAT, BEAT * 0.82, 0.32);
+      osc(f, "triangle", startT + b * BEAT, BEAT * 0.6, 0.10);
+    });
+
+    // Melody — slow, bluesy, swung
+    const MEL_HZ = [466.2,415.3,466.2,554.4,466.2,415.3,349.2,311.1,
+                    415.3,466.2,415.3,349.2,311.1,349.2,415.3,466.2];
+    MEL_HZ.forEach((f, b) => {
+      const t = startT + b * SWING;
+      osc(f, "sine",   t, SWING * 0.9, 0.28);
+      osc(f, "sine",   t, SWING * 0.9, 0.08, 8); // slight detune for warmth
+    });
+
+    // Ride cymbal feel — triplet swing tick
+    for (let b = 0; b < 16; b++) {
+      osc(1800, "square", startT + b * SWING, 0.04, 0.022);
+    }
+
+    // Soft kick on 1 and 3
+    [0, 2, 4, 6, 8, 10, 12, 14].filter(b => b % 4 === 0 || b % 4 === 2).forEach(b => {
+      osc(90, "sine", startT + b * BEAT, 0.16, 0.28);
+    });
+
+    return 16 * BEAT;
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  PÆIR A PÆRA MUSIC — tense mysterious dungeon crawl
+// ═══════════════════════════════════════════════════
+const PaerMusic = _makeMusicPlayer({
+  volume: 0.15,
+  buildLoop({ osc, startT }) {
+    // D natural minor — dark, suspenseful
+    // D3 E3 F3 G3 A3 Bb3 C4 D4 F4 A4
+    const N = [146.8,164.8,174.6,196.0,220.0,233.1,261.6,293.7,349.2,440.0];
+    const BEAT = 0.52; // ~58bpm — slow, creeping tension
+    const BARS = 16;
+
+    // Drone pad — low D + A (power fifth) held throughout
+    osc(73.4,  "sine",     startT, BARS * BEAT, 0.22);  // D2 drone
+    osc(110.0, "sine",     startT, BARS * BEAT, 0.12);  // A2 fifth
+    osc(73.4,  "triangle", startT, BARS * BEAT, 0.08, 3); // slight shimmer
+
+    // Brooding bass movement — stepwise descent
+    const BASS = [0,0,7,7, 6,6,5,5, 4,4,3,3, 2,1,0,0];
+    BASS.forEach((ni, b) => {
+      osc(N[ni],   "sine",   startT + b * BEAT, BEAT * 0.88, 0.28);
+      osc(N[ni]/2, "sine",   startT + b * BEAT, BEAT * 0.88, 0.15);
+    });
+
+    // Sparse eerie melody — long notes, wide intervals
+    const MEL = [
+      [7,0,2.8],[9,3,1.8],[8,5,1.8],[7,7,2.8],
+      [6,10,1.8],[4,12,2.8],[3,15,1],
+    ];
+    MEL.forEach(([ni, beat, dur]) => {
+      const t = startT + beat * BEAT;
+      osc(N[ni],   "sine",     t, dur * BEAT, 0.32);
+      osc(N[ni]*2, "sine",     t, dur * BEAT, 0.08);  // upper octave ghost
+      osc(N[ni],   "triangle", t, dur * BEAT, 0.10, -5);
+    });
+
+    // Tense inner rhythm — muted triplet pulse
+    for (let b = 0; b < BARS; b++) {
+      if (b % 3 === 0) {
+        osc(180, "sawtooth", startT + b * BEAT, 0.06, 0.07);
+        osc(120, "sine",     startT + b * BEAT, 0.10, 0.18);
+      }
+    }
+
+    // Heartbeat kick — slow thud every 2 beats
+    for (let b = 0; b < BARS; b += 2) {
+      osc(55,  "sine", startT + b * BEAT,          0.22, 0.40);
+      osc(45,  "sine", startT + b * BEAT + 0.14,   0.18, 0.22); // double-thud feel
+    }
+
+    // Eerie high shimmer — very quiet
+    for (let b = 0; b < BARS; b += 4) {
+      osc(1760, "sine", startT + b * BEAT, BEAT * 1.5, 0.03);
+      osc(1318, "sine", startT + b * BEAT + BEAT, BEAT, 0.025);
+    }
+
+    return BARS * BEAT;
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  CAPTURE MUSIC — background BGM for capture overlay
+// ═══════════════════════════════════════════════════
+const CaptureMusic = (() => {
+  let _ctx        = null;
+  let _masterGain = null;
+  let _playing    = false;
+  let _nodes      = [];   // all active oscillator/buffer nodes
+  let _loopHandle = null;
+
+  // ── Boot AudioContext on first user gesture ────────
+  function _ensureCtx() {
+    if (_ctx) return;
+    _ctx = new (window.AudioContext || window.webkitAudioContext)();
+    _masterGain = _ctx.createGain();
+    _masterGain.gain.value = 0.18;
+    _masterGain.connect(_ctx.destination);
+  }
+
+  // ── Low-level tone helpers ─────────────────────────
+  function _osc(freq, type, startT, dur, vol=1, detune=0) {
+    const o = _ctx.createOscillator();
+    const g = _ctx.createGain();
+    o.type            = type;
+    o.frequency.value = freq;
+    o.detune.value    = detune;
+    g.gain.setValueAtTime(0, startT);
+    g.gain.linearRampToValueAtTime(vol, startT + 0.02);
+    g.gain.setValueAtTime(vol, startT + dur - 0.06);
+    g.gain.linearRampToValueAtTime(0, startT + dur);
+    o.connect(g);
+    g.connect(_masterGain);
+    o.start(startT);
+    o.stop(startT + dur + 0.05);
+    _nodes.push(o);
+  }
+
+  function _pad(freq, startT, dur, vol=0.4) {
+    // Lush pad = sine + slight detune twin for chorus feel
+    _osc(freq, "sine",     startT, dur, vol,  0);
+    _osc(freq, "sine",     startT, dur, vol * 0.5, 6);
+    _osc(freq, "triangle", startT, dur, vol * 0.25, -4);
+  }
+
+  // ── Reverb-like convolver via noise burst ──────────
+  function _makeReverb(dur=1.5) {
+    const sr      = _ctx.sampleRate;
+    const frames  = sr * dur;
+    const buf     = _ctx.createBuffer(2, frames, sr);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < frames; i++) {
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / frames, 2.5);
+      }
+    }
+    const conv = _ctx.createConvolver();
+    conv.buffer = buf;
+    conv.connect(_masterGain);
+    return conv;
+  }
+
+  // ── Melodic sequence ───────────────────────────────
+  // Pentatonic-ish mystery scale — feels like tall grass & adventure
+  // Notes in Hz: C4 E4 G4 A4 B4 D5 E5 G5
+  const NOTES = [261.6, 329.6, 392, 440, 493.9, 587.3, 659.3, 784];
+
+  // Chord progression (indices into NOTES): i=0 iv=3 vi=5 v=4
+  const CHORDS = [
+    [0, 2, 3],   // C E G  — home
+    [3, 5, 6],   // A D E  — lift
+    [2, 4, 5],   // G B D  — tension
+    [0, 2, 4],   // C G B  — resolve
+  ];
+
+  // Melody pattern over 4 bars (note index, beat offset, duration in beats)
+  const MELODY = [
+    [4,0,.9],[6,1,.9],[7,2,.9],[6,3,.9],
+    [5,4,.9],[7,5,.9],[6,6,.9],[4,7,.9],
+    [3,8,.9],[5,9,.9],[4,10,.9],[6,11,.9],
+    [7,12,1.8],[4,14,.9],[6,15,.9],
+  ];
+
+  const BEAT     = 0.42;   // seconds per beat (≈143 bpm — upbeat but not frantic)
+  const BAR      = 4;      // beats per bar
+  const LOOP_LEN = 16;     // beats per full loop
+
+  function _scheduleLoop(startT) {
+    if (!_playing) return;
+    const conv = _makeReverb(2);
+
+    // ── Pads / chords ──
+    CHORDS.forEach((chord, ci) => {
+      const t = startT + ci * BAR * BEAT;
+      chord.forEach(ni => _pad(NOTES[ni], t, BAR * BEAT * 0.9, 0.28));
+      // Bass root — one octave down
+      _osc(NOTES[chord[0]] / 2, "sine", t, BAR * BEAT * 0.85, 0.35);
+    });
+
+    // ── Melody ──
+    MELODY.forEach(([ni, beat, dur]) => {
+      const t   = startT + beat * BEAT;
+      const vol = 0.55;
+      _osc(NOTES[ni],     "sine",     t, dur * BEAT, vol);
+      _osc(NOTES[ni] * 2, "sine",     t, dur * BEAT, vol * 0.12);  // octave shimmer
+    });
+
+    // ── Soft pulse / hi-hat feel ──
+    for (let b = 0; b < LOOP_LEN; b++) {
+      const t = startT + b * BEAT;
+      // Kick-like thud on beats 0 & 8
+      if (b % 8 === 0) {
+        _osc(80, "sine", t, 0.18, 0.5);
+        _osc(60, "sine", t, 0.22, 0.3);
+      }
+      // Soft tick on every 2nd beat
+      if (b % 2 === 0) {
+        _osc(1200, "square", t, 0.04, 0.04);
+      }
+    }
+
+    // Schedule next loop
+    const loopDur = LOOP_LEN * BEAT;
+    _loopHandle = setTimeout(() => _scheduleLoop(startT + loopDur), (loopDur - 0.3) * 1000);
+  }
+
+  // ── Public API ─────────────────────────────────────
+  function play() {
+    if (_playing) return;
+    _ensureCtx();
+    if (_ctx.state === "suspended") _ctx.resume();
+    _playing = true;
+    _scheduleLoop(_ctx.currentTime + 0.1);
+  }
+
+  function stop() {
+    if (!_playing) return;
+    _playing = false;
+    clearTimeout(_loopHandle);
+    // Fade master gain to 0 then kill nodes
+    if (_masterGain) {
+      _masterGain.gain.setValueAtTime(_masterGain.gain.value, _ctx.currentTime);
+      _masterGain.gain.linearRampToValueAtTime(0, _ctx.currentTime + 0.6);
+    }
+    setTimeout(() => {
+      _nodes.forEach(n => { try { n.stop(); } catch(_) {} });
+      _nodes = [];
+      if (_masterGain) _masterGain.gain.value = 0.18; // reset for next play
+    }, 700);
+  }
+
+  function isPlaying() { return _playing; }
+
+  return { play, stop, isPlaying };
+})();
+
+// ═══════════════════════════════════════════════════
+//  TRADING PLAZA — marketplace for Pokémon
+// ═══════════════════════════════════════════════════
+const TradinPlaza = (() => {
+  let _cache        = null;
+  let _loading      = false;
+  let _sellerMode   = false;   // is sell modal open?
+  let _selectedPoke = null;    // { id, name, tier, count } being listed
+  let _sellQty      = 1;
+  let _sellPrice    = 100;     // per-unit price
+
+  // ── Cache ───────────────────────────────────────────
+  async function _load(force=false) {
+    if (_cache && !force) return _cache;
+    if (_loading) return [];
+    _loading = true;
+    try { _cache = await DB.getTrades(30); }
+    catch(e) { console.error("Trades load error",e); _cache = []; }
+    _loading = false;
+    return _cache;
+  }
+  function invalidate() { _cache = null; }
+
+  // ── Render plaza listings ───────────────────────────
+  async function render(force=false) {
+    const wrap = $("tp-listings"); if (!wrap) return;
+    wrap.innerHTML = `<div class="tp-loading"><i class="bi bi-arrow-repeat"></i> Loading…</div>`;
+    const trades = await _load(force);
+    wrap.innerHTML = "";
+    if (!trades.length) {
+      wrap.innerHTML = `<div class="tp-empty"><i class="bi bi-shop"></i> No listings yet — be the first to sell!</div>`;
+      return;
+    }
+    trades.forEach(t => {
+      const isMe     = t.sellerId === State.user?.uid;
+      const isLegend = t.pokemonTier==="t2" || TIER2_IDS.has(t.pokemonId);
+      const card = document.createElement("div");
+      card.className = "tp-card" + (isLegend?" tp-card-legend":"") + (isMe?" tp-card-mine":"");
+      card.innerHTML = `
+        <div class="tp-card-img-wrap${isLegend?" tp-legend-img":""}">
+          <img src="${POKE_ARTWORK_URL(t.pokemonId)}" alt="${t.pokemonName}"
+            onerror="this.src='${POKE_SPRITE_URL(t.pokemonId)}'"
+            loading="lazy" class="tp-card-img" />
+          ${isLegend?`<span class="tp-legend-gem"><i class="bi bi-gem-fill"></i></span>`:""}
+        </div>
+        <div class="tp-card-info">
+          <span class="tp-card-name">${t.pokemonName}</span>
+          <span class="tp-card-id">#${String(t.pokemonId).padStart(3,"0")} · ${isLegend?"Legendary":"Common"}</span>
+          <span class="tp-card-qty">Qty: <strong>${t.quantity}</strong></span>
+          <span class="tp-card-seller"><i class="bi bi-person-fill"></i> ${t.sellerName}</span>
+        </div>
+        <div class="tp-card-price-col">
+          <span class="tp-card-price"><i class="bi bi-coin"></i> ${fmt.coins(t.totalPrice)}</span>
+          <span class="tp-card-unit">${t.quantity>1?`${fmt.coins(t.priceEach)} ea`:"per unit"}</span>
+          ${isMe
+            ? `<span class="tp-card-mine-tag">YOUR LISTING</span>`
+            : `<button class="tp-buy-btn" data-id="${t.id}"><i class="bi bi-bag-fill"></i> BUY</button>`
+          }
+        </div>`;
+      if (!isMe) {
+        card.querySelector(".tp-buy-btn")?.addEventListener("click", () => _promptBuy(t));
+      }
+      wrap.appendChild(card);
+    });
+  }
+
+  // ── Sell flow ───────────────────────────────────────
+  function openSellModal() {
+  const modal = $("tp-sell-modal");
+  if (!modal) {
+    console.error("❌ tp-sell-modal element not found in DOM");
+    Toast.show("Sell modal not found in page.", "loss");
+    return;
+  }
+  
+  const gallery = $("tp-sell-gallery");
+  const controls = $("tp-sell-controls");
+  console.log("✅ Modal found:", modal);
+  console.log("Gallery found:", gallery);
+  console.log("Controls found:", controls);
+  
+  const col = State.userData?.pokemonCollection || [];
+  if (!col.length) {
+    Toast.show("No Pokémon in your collection yet!", "loss");
+    return;
+  }
+  
+  _selectedPoke = null;
+  _sellQty = 1;
+  _sellPrice = 100;
+  
+  // Render gallery first, then open
+  _renderSellGallery(col);
+  _renderSellControls();
+  
+  modal.classList.remove("hidden");
+  requestAnimationFrame(() => requestAnimationFrame(() => modal.classList.add("visible")));
+}
+
+  function _closeSellModal() {
+    const modal = $("tp-sell-modal"); if (!modal) return;
+    modal.classList.remove("visible");
+    setTimeout(() => modal.classList.add("hidden"), 320);
+  }
+
+  function _renderSellGallery(col) {
+    const grid = $("tp-sell-gallery"); if (!grid) return;
+    grid.innerHTML = "";
+    [...col].sort((a,b)=>a.id-b.id).forEach(p => {
+      const isLegend = p.tier==="t2" || TIER2_IDS.has(p.id);
+      const count    = p.count || 1;
+      const card     = document.createElement("button");
+      card.className = "tp-sell-poke" + (_selectedPoke?.id===p.id?" selected":"");
+      card.innerHTML = `
+        <img src="${POKE_ARTWORK_URL(p.id)}" alt="${p.name}"
+          onerror="this.src='${POKE_SPRITE_URL(p.id)}'"
+          loading="lazy" class="tp-sell-img" />
+        ${isLegend?`<span class="tp-sell-gem"><i class="bi bi-gem-fill"></i></span>`:""}
+        ${count>1?`<span class="tp-sell-count">×${count}</span>`:""}
+        <span class="tp-sell-name">${p.name}</span>`;
+      card.addEventListener("click", () => {
+        _selectedPoke = p; _sellQty = 1;
+        _renderSellGallery(col);
+        _renderSellControls();
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  function _renderSellControls() {
+    const wrap = $("tp-sell-controls"); if (!wrap) return;
+    if (!_selectedPoke) {
+      wrap.innerHTML = `<p class="tp-sell-pick-hint">← Select a Pokémon to list</p>`;
+      return;
+    }
+    const count    = _selectedPoke.count || 1;
+    const maxQty   = count;
+    const total    = _sellPrice * _sellQty;
+    wrap.innerHTML = `
+      <div class="tp-sell-selected">
+        <img src="${POKE_ARTWORK_URL(_selectedPoke.id)}" class="tp-sell-sel-img"
+          onerror="this.src='${POKE_SPRITE_URL(_selectedPoke.id)}'" />
+        <div>
+          <p class="tp-sell-sel-name">${_selectedPoke.name}</p>
+          <p class="tp-sell-sel-own">You own: <strong>${count}</strong></p>
+        </div>
+      </div>
+      <div class="tp-sell-row">
+        <label class="tp-sell-label">PRICE PER UNIT <span class="tp-sell-min">(min 100)</span></label>
+        <div class="tp-sell-price-wrap">
+          <i class="bi bi-coin tp-price-icon"></i>
+          <input id="tp-price-input" type="number" min="100" step="50"
+            value="${_sellPrice}" class="tp-price-input" />
+        </div>
+      </div>
+      ${count > 1 ? `
+      <div class="tp-sell-row">
+        <label class="tp-sell-label">QUANTITY</label>
+        <div class="tp-qty-wrap">
+          <button class="tp-qty-btn" id="tp-qty-minus">−</button>
+          <span class="tp-qty-val" id="tp-qty-display">${_sellQty}</span>
+          <button class="tp-qty-btn" id="tp-qty-plus">+</button>
+          <span class="tp-qty-max">/ ${maxQty}</span>
+        </div>
+      </div>` : ""}
+      <div class="tp-sell-total">
+        TOTAL <span id="tp-sell-total-val"><i class="bi bi-coin"></i> ${fmt.coins(total)}</span>
+      </div>
+      <button id="tp-confirm-list" class="tp-confirm-list-btn">
+        <i class="bi bi-shop"></i> LIST IN MERCHANT
+      </button>`;
+
+    // Price input
+    $("tp-price-input")?.addEventListener("input", e => {
+      _sellPrice = Math.max(100, parseInt(e.target.value)||100);
+      _updateTotal();
+    });
+    $("tp-price-input")?.addEventListener("blur", e => {
+      if (parseInt(e.target.value) < 100) e.target.value = 100;
+      _sellPrice = Math.max(100, parseInt(e.target.value)||100);
+      _updateTotal();
+    });
+    // Qty buttons
+    $("tp-qty-minus")?.addEventListener("click", () => {
+      if (_sellQty > 1) { _sellQty--; _updateQtyDisplay(); }
+    });
+    $("tp-qty-plus")?.addEventListener("click", () => {
+      if (_sellQty < maxQty) { _sellQty++; _updateQtyDisplay(); }
+    });
+    // List button
+    $("tp-confirm-list")?.addEventListener("click", _submitListing);
+  }
+
+  function _updateQtyDisplay() {
+    const d = $("tp-qty-display"); if (d) d.textContent = _sellQty;
+    _updateTotal();
+  }
+  function _updateTotal() {
+    const t = $("tp-sell-total-val");
+    if (t) t.innerHTML = `<i class="bi bi-coin"></i> ${fmt.coins(_sellPrice * _sellQty)}`;
+  }
+
+  async function _submitListing() {
+    if (!_selectedPoke) return;
+    if (_sellPrice < 100) { Toast.show("Minimum price is 100 coins!", "loss"); return; }
+    const btn = $("tp-confirm-list");
+    if (btn) { btn.disabled=true; btn.innerHTML=`<span class="spinner-border spinner-border-sm"></span> Listing…`; }
+
+    try {
+      await DB.addTrade({
+        sellerId:    State.user.uid,
+        sellerName:  State.userData.username || "Trainer",
+        sellerAvatar:State.userData.avatar   || "",
+        pokemonId:   _selectedPoke.id,
+        pokemonName: _selectedPoke.name,
+        pokemonTier: _selectedPoke.tier || "t1",
+        quantity:    _sellQty,
+        priceEach:   _sellPrice,
+        totalPrice:  _sellPrice * _sellQty,
+      });
+      Toast.show(`${_selectedPoke.name} listed in the merchant!`, "win", 3000);
+      invalidate();
+      _closeSellModal();
+      render(true);
+    } catch(e) {
+      console.error("List error",e);
+      Toast.show("Couldn't list item. Try again.", "loss");
+      if (btn) { btn.disabled=false; btn.innerHTML=`<i class="bi bi-shop"></i> LIST IN MERCHANT`; }
+    }
+  }
+
+  // ── Buy flow ────────────────────────────────────────
+  function _promptBuy(trade) {
+    const modal = $("tp-buy-modal"); if (!modal) return;
+    const isLegend = trade.pokemonTier==="t2" || TIER2_IDS.has(trade.pokemonId);
+    $("tpbm-img").src        = POKE_ARTWORK_URL(trade.pokemonId);
+    $("tpbm-img").onerror    = () => { $("tpbm-img").src = POKE_SPRITE_URL(trade.pokemonId); };
+    $("tpbm-name").textContent  = trade.pokemonName;
+    $("tpbm-seller").textContent= trade.sellerName;
+    $("tpbm-price").textContent = fmt.coins(trade.totalPrice);
+    $("tpbm-qty").textContent   = trade.quantity;
+
+    const canAfford = Coins.get() >= trade.totalPrice;
+    const confirmBtn = $("tpbm-confirm");
+    if (confirmBtn) {
+      confirmBtn.disabled  = !canAfford;
+      confirmBtn.innerHTML = canAfford
+        ? `<i class="bi bi-check-circle-fill"></i> YES, PURCHASE`
+        : `<i class="bi bi-coin"></i> Need ${fmt.coins(trade.totalPrice)} coins`;
+      const fresh = confirmBtn.cloneNode(true);
+      confirmBtn.parentNode.replaceChild(fresh, confirmBtn);
+      if (canAfford) {
+        fresh.addEventListener("click", () => _executeBuy(trade));
+      }
+    }
+    modal.classList.remove("hidden");
+    requestAnimationFrame(() => requestAnimationFrame(() => modal.classList.add("visible")));
+  }
+
+  function _closeBuyModal() {
+    const modal = $("tp-buy-modal"); if (!modal) return;
+    modal.classList.remove("visible");
+    setTimeout(() => modal.classList.add("hidden"), 320);
+  }
+
+  async function _executeBuy(trade) {
+    if (Coins.get() < trade.totalPrice) { Toast.show("Not enough coins!", "loss"); return; }
+    const btn = $("tpbm-confirm");
+    if (btn) { btn.disabled=true; btn.innerHTML=`<span class="spinner-border spinner-border-sm"></span> Purchasing…`; }
+
+    try {
+      await Coins.deduct(trade.totalPrice);
+      await DB.executeTrade(trade.id, State.user.uid, State.userData.username||"Trainer");
+
+      // Add pokemon to buyer's collection
+      const col      = State.userData.pokemonCollection || [];
+      const existing = col.find(p => p.id === trade.pokemonId);
+      const newCol   = existing
+        ? col.map(p => p.id===trade.pokemonId
+            ? { ...p, count:(p.count||1)+trade.quantity }
+            : p)
+        : [...col, { id:trade.pokemonId, name:trade.pokemonName, tier:trade.pokemonTier, count:trade.quantity }];
+
+      State.userData.pokemonCollection = newCol;
+      await DB.updateUser(State.user.uid, {
+        pokemonCollection: newCol,
+        totalCaptures: (State.userData.totalCaptures||0) + trade.quantity,
+      });
+
+      Toast.show(`${trade.pokemonName} purchased! Check your collection.`, "win", 3500);
+      invalidate();
+      _closeBuyModal();
+      render(true);
+    } catch(e) {
+      console.error("Buy error",e);
+      Toast.show("Purchase failed. Try again.", "loss");
+      if (btn) { btn.disabled=false; btn.innerHTML=`<i class="bi bi-check-circle-fill"></i> YES, PURCHASE`; }
+    }
+  }
+
+  function init() {
+    $("btn-tp-sell")?.addEventListener("click", openSellModal);
+    $("tp-sell-modal")?.addEventListener("click", e => { if(e.target.id==="tp-sell-modal") _closeSellModal(); });
+    $("tp-sell-close")?.addEventListener("click", _closeSellModal);
+    $("tp-buy-modal")?.addEventListener("click",  e => { if(e.target.id==="tp-buy-modal")  _closeBuyModal(); });
+    $("tpbm-cancel")?.addEventListener("click", _closeBuyModal);
+$("tpbm-cancel-bottom")?.addEventListener("click", _closeBuyModal);
+  }
+
+  return { render, invalidate, init };
+})();
+
+// ═══════════════════════════════════════════════════
+//  POKÉMON MASTERS — player collection leaderboard
+// ═══════════════════════════════════════════════════
+const PokemonMasters = (() => {
+  let _cache     = null;   // cached masters array
+  let _loading   = false;
+  let _openIdx   = null;   // which accordion row is expanded
+
+  async function load(force=false) {
+    if (_cache && !force) return _cache;
+    if (_loading) return null;
+    _loading = true;
+    try {
+      _cache = await DB.getPokemonMasters(10);
+    } catch(e) {
+      console.error("Masters load error", e);
+      _cache = [];
+    }
+    _loading = false;
+    return _cache;
+  }
+
+  function invalidate() { _cache = null; }
+
+  function _legendCount(col=[]) {
+    return col.filter(p => p.tier==="t2" || TIER2_IDS.has(p.id)).length;
+  }
+  function _commonCount(col=[]) {
+    return col.filter(p => p.tier!=="t2" && !TIER2_IDS.has(p.id)).length;
+  }
+
+  function _pokemonThumb(p) {
+    const isLegend = p.tier==="t2" || TIER2_IDS.has(p.id);
+    return `<div class="pm-thumb${isLegend?" pm-thumb-legend":""}" title="${p.name}">
+      <img src="${POKE_ARTWORK_URL(p.id)}" alt="${p.name}"
+        onerror="this.src='${POKE_SPRITE_URL(p.id)}'"
+        loading="lazy" class="pm-thumb-img" />
+      ${isLegend?`<span class="pm-thumb-gem"><i class="bi bi-gem-fill"></i></span>`:""}
+    </div>`;
+  }
+
+  function _renderSection(masters) {
+    const wrap = $("pm-list"); if (!wrap) return;
+
+    if (!masters || !masters.length) {
+      wrap.innerHTML = `<div class="pm-empty"><i class="bi bi-people"></i> No trainers yet — be the first!</div>`;
+      return;
+    }
+
+    wrap.innerHTML = "";
+    masters.forEach((user, idx) => {
+      const col      = user.pokemonCollection || [];
+      const legends  = col.filter(p => p.tier==="t2" || TIER2_IDS.has(p.id));
+      const commons  = col.filter(p => p.tier!=="t2" && !TIER2_IDS.has(p.id));
+      const isMe     = user.uid === State.user?.uid;
+      const isOpen   = _openIdx === idx;
+      const medals   = ["🥇","🥈","🥉"];
+      const rank     = medals[idx] ?? `#${idx+1}`;
+
+      const row = document.createElement("div");
+      row.className = "pm-row" + (isMe?" pm-row-me":"") + (isOpen?" pm-row-open":"");
+      row.innerHTML = `
+        <button class="pm-header" data-idx="${idx}" aria-expanded="${isOpen}">
+          <span class="pm-rank">${rank}</span>
+          <span class="pm-avatar">${avatarHtml(user.avatar)}</span>
+          <div class="pm-info">
+            <span class="pm-username">${user.username||"Trainer"}${isMe?`<span class="pm-you">YOU</span>`:""}</span>
+            <span class="pm-summary">
+              ${legends.length?`<span class="pm-tag legend-tag"><i class="bi bi-gem-fill"></i> ${legends.length} Legendary</span>`:""}
+              ${commons.length?`<span class="pm-tag common-tag"><i class="bi bi-collection-fill"></i> ${commons.length} Common</span>`:""}
+              ${!col.length?`<span class="pm-tag empty-tag">No captures yet</span>`:""}
+            </span>
+          </div>
+          <i class="bi bi-chevron-down pm-chevron ${isOpen?"open":""}"></i>
+        </button>
+        <div class="pm-body ${isOpen?"":"hidden"}">
+          ${legends.length ? `
+            <p class="pm-section-label legend-label"><i class="bi bi-gem-fill"></i> Legendary & Epic</p>
+            <div class="pm-thumbs">${legends.map(_pokemonThumb).join("")}</div>` : ""}
+          ${commons.length ? `
+            <p class="pm-section-label common-label"><i class="bi bi-collection-fill"></i> Common</p>
+            <div class="pm-thumbs">${commons.map(_pokemonThumb).join("")}</div>` : ""}
+          ${!col.length ? `<p class="pm-no-captures">This trainer hasn't caught any Pokémon yet.</p>` : ""}
+        </div>`;
+
+      // Accordion toggle — pure DOM, zero extra reads
+      row.querySelector(".pm-header").addEventListener("click", () => {
+        _openIdx = isOpen ? null : idx;
+        _renderSection(masters); // re-render with new open state
+      });
+
+      wrap.appendChild(row);
+    });
+  }
+
+  async function render(force=false) {
+    const wrap = $("pm-list"); if (!wrap) return;
+    wrap.innerHTML = `<div class="pm-loading"><i class="bi bi-arrow-repeat"></i> Loading trainers…</div>`;
+    const masters = await load(force);
+    _renderSection(masters);
+  }
+
+  return { render, invalidate };
+})();
+
+// ═══════════════════════════════════════════════════
 //  CAPTURE A POKÉMON — TWO-TIER SYSTEM
 // ═══════════════════════════════════════════════════
 const CaptureGame = {
@@ -1253,8 +2088,18 @@ const CaptureGame = {
 
   init() {
     $("open-capture")?.addEventListener("click",        () => this.open());
-    $("back-capture")?.addEventListener("click",        () => this._closeOverlay());
+    $("back-capture")?.addEventListener("click",        () => { CaptureMusic.stop(); this._closeOverlay(); });
     $("btn-capture-again")?.addEventListener("click",   () => this._resetForNewThrow());
+    $("btn-capture-mute")?.addEventListener("click", () => {
+      const icon = $("capture-mute-icon");
+      if (CaptureMusic.isPlaying()) {
+        CaptureMusic.stop();
+        if (icon) { icon.className = "bi bi-music-note-beamed"; icon.style.opacity = "0.35"; }
+      } else {
+        CaptureMusic.play();
+        if (icon) { icon.className = "bi bi-music-note-beamed"; icon.style.opacity = "1"; }
+      }
+    });
     $("btn-capture-howto")?.addEventListener("click",   () => this._showHowToModal());
     $("btn-howto-close")?.addEventListener("click",     () => this._closeHowToModal());
     $("capture-howto-modal")?.addEventListener("click", (e) => {
@@ -1266,19 +2111,22 @@ const CaptureGame = {
   },
 
   open() {
-    cls.remove($("overlay-capture"), "hidden");
-    this._pickedBall   = null;
-    this._revealedPoke = null;
-    this._wasFreeThrow = false;
-    const revealEl = $("capture-reveal");
-    if (revealEl) cls.add(revealEl, "hidden");
-    const againWrap = $("capture-again-wrap");
-    if (againWrap) cls.add(againWrap, "hidden");
-    this._refreshCoins();
-    this._renderTierTabs();
-    this._renderState();
-    this._showHowToModal();
-  },
+  cls.remove($("overlay-capture"), "hidden");
+  this._pickedBall = null;
+  this._revealedPoke = null;
+  this._wasFreeThrow = false;
+  const revealEl = $("capture-reveal");
+  if (revealEl) cls.add(revealEl, "hidden");
+  const againWrap = $("capture-again-wrap");
+  if (againWrap) cls.add(againWrap, "hidden");
+  this._refreshCoins();
+  this._renderTierTabs();
+  this._renderState();
+  this._showHowToModal();
+  PokemonMasters.render();
+TradinPlaza.render();
+CaptureMusic.play();
+},
 
   _closeOverlay() {
     cls.add($("overlay-capture"), "hidden");
@@ -1513,13 +2361,17 @@ const CaptureGame = {
 
   async _persist(pokeId, pokeName_) {
     if (!State.user || !State.userData) return;
-    const now        = new Date();
+    PokemonMasters.invalidate();
+    TradinPlaza.invalidate();
+    const now = new Date();
     const collection = State.userData.pokemonCollection || [];
-    const alreadyHave = collection.some(p => p.id === pokeId);
-    const newCollection = alreadyHave
-      ? collection
-      : [...collection, { id: pokeId, name: pokeName_, tier: this._tier }];
-
+    const existing = collection.find(p => p.id === pokeId);
+    const newCollection = existing ?
+      collection.map(p => p.id === pokeId ?
+        { ...p, count: (p.count || 1) + 1 } :
+        p) :
+      [...collection, { id: pokeId, name: pokeName_, tier: this._tier, count: 1 }];
+      
     const newCaptures = (State.userData.totalCaptures || 0) + 1;
     const paidCount   = this._paidCount();
 
@@ -1624,6 +2476,33 @@ const PaerGame = (() => {
 
   // ── DOM helper ─────────────────────────────────────
   const el = (id) => document.getElementById(id);
+
+  // ── Daily cost progression ─────────────────────────
+  // Stored in userData: paerPlayCount (resets daily), paerLastPlayDate
+  function _todayStr() {
+    return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  }
+  function _getPlayCount() {
+    if (!State.userData) return 0;
+    const last = State.userData.paerLastPlayDate;
+    if (last !== _todayStr()) return 0; // new day → reset
+    return State.userData.paerPlayCount ?? 0;
+  }
+  function _currentCost() {
+    // 50 × 2^playCount: 50, 100, 200, 400 …
+    return PAER_COST_BASE * Math.pow(2, _getPlayCount());
+  }
+  async function _recordPlay() {
+    if (!State.user || !State.userData) return;
+    const today = _todayStr();
+    const count = _getPlayCount() + 1;
+    State.userData.paerPlayCount    = count;
+    State.userData.paerLastPlayDate = today;
+    await DB.updateUser(State.user.uid, {
+      paerPlayCount:    count,
+      paerLastPlayDate: today,
+    });
+  }
 
   // ── Tile definitions ───────────────────────────────
   // idx: 0=💎 1=💰 2=💵 3=💣 4=🔥 5=🎁 6=❄️ 7=⭐ 8=🧿
@@ -2070,9 +2949,10 @@ function _buildPool(wave) {
   // ── Time up ────────────────────────────────────────
 // ── Time up ────────────────────────────────────────
   function _timeUp() {
-    if (_phase === "done") return;
-    _stopTimer();
-    _phase     = "done";
+  if (_phase === "done") return;
+  _stopTimer();
+  PaerMusic.stop();
+  _phase = "done";
     _freezeSec = 0;
     _starSec   = 0;
     _starMulti = 1;
@@ -2093,9 +2973,11 @@ function _buildPool(wave) {
   }
 
   // ── Result modal ───────────────────────────────────
-  function _showResultModal() {
+function _showResultModal() {
     const modal = el("paer-result-modal"); if (!modal) return;
-    const giftCount = _gifts.filter(g => !g.opened).length;
+    const giftCount  = _gifts.filter(g => !g.opened).length;
+    const nextCost   = _currentCost(); // already recorded this play, so this IS next cost
+    const canAfford  = Coins.get() >= nextCost;
 
     el("prm-bank").textContent  = `₱${fmt.coins(_bank)}`;
     el("prm-wave").textContent  = `Wave ${_wave + 1}`;
@@ -2108,10 +2990,28 @@ function _buildPool(wave) {
       giftNote.className = giftCount > 0 ? "prm-gift-note visible" : "prm-gift-note";
     }
 
+    // Update Play Again button with next cost
+    const againBtn = el("btn-prm-again");
+    if (againBtn) {
+      if (canAfford) {
+        againBtn.disabled = false;
+        againBtn.innerHTML = `<i class="bi bi-arrow-counterclockwise"></i> PLAY AGAIN — <i class="bi bi-coin"></i> ${fmt.coins(nextCost)}`;
+      } else {
+        againBtn.disabled = true;
+        againBtn.innerHTML = `<i class="bi bi-coin"></i> Need ${fmt.coins(nextCost)} coins`;
+      }
+    }
+
+    // Show cost reset note
+    const resetNote = el("prm-reset-note");
+    if (resetNote) {
+      resetNote.innerHTML = `<i class="bi bi-clock"></i> Cost resets to <strong>${fmt.coins(PAER_COST_BASE)} coins</strong> tomorrow`;
+    }
+
     cls.remove(modal, "hidden");
     requestAnimationFrame(() => requestAnimationFrame(() => cls.add(modal, "visible")));
   }
-
+  
   function _closeResultModal() {
     const modal = el("paer-result-modal"); if (!modal) return;
     cls.remove(modal, "visible");
@@ -2122,11 +3022,13 @@ function _buildPool(wave) {
 
   // ── Game start sequence ────────────────────────────
   async function _startGame() {
-    if (Coins.get() < PAER_COST) { Toast.show("Not enough coins!", "loss"); return; }
+    const cost = _currentCost();
+    if (Coins.get() < cost) { Toast.show(`Need ${fmt.coins(cost)} coins!`, "loss"); return; }
     const btn = el("btn-paer-start");
     if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> OPENING…`; }
 
-    await Coins.deduct(PAER_COST);
+    await Coins.deduct(cost);
+    await _recordPlay();
     _refreshCoins();
 
     _wave   = 0;
@@ -2182,9 +3084,10 @@ function _buildPool(wave) {
     await sleep(300);
 
     _phase = "play";
-    _renderGrid(true);
-    _setStatus(`<div class="paer-phase-badge play-badge"><i class="bi bi-hand-index-fill"></i> WAVE 1 — TAP TILES!</div>`);
-    _startTimer();
+_renderGrid(true);
+_setStatus(`<div class="paer-phase-badge play-badge"><i class="bi bi-hand-index-fill"></i> WAVE 1 — TAP TILES!</div>`);
+_startTimer();
+PaerMusic.play();
 
     if (btn) {
       btn.disabled  = false;
@@ -2194,27 +3097,39 @@ function _buildPool(wave) {
 
   // ── Reset to idle ──────────────────────────────────
 function _resetToIdle() {
-    _stopTimer();
-    _phase     = "idle";
-    _wave      = 0;
-    _tiles     = [];
-    _gifts     = [];
-    _giftId    = 0;
-    _freezeSec = 0;
-    _starSec   = 0;
-    _starMulti = 1;
-    _orbActive = false;
-    _closeResultModal();
-    cls.remove(el("paer-start-wrap"),   "hidden");
-    cls.add(el("paer-grid-wrap"),       "hidden");
-    cls.add(el("paer-timer-wrap"),      "hidden");
-    cls.add(el("paer-power-bar"),       "hidden");
-    _setStatus("");
-    _refreshCoins();
-    _refreshBank();
-    _renderGiftTray();
-    _renderPowerBar();
-  }
+  _stopTimer();
+  _phase = "idle";
+  _wave = 0;
+  _tiles = [];
+  _gifts = [];
+  _giftId = 0;
+  _freezeSec = 0;
+  _starSec = 0;
+  _starMulti = 1;
+  _orbActive = false;
+  _closeResultModal();
+  cls.remove(el("paer-start-wrap"), "hidden");
+  cls.add(el("paer-grid-wrap"), "hidden");
+  cls.add(el("paer-timer-wrap"), "hidden");
+  cls.add(el("paer-power-bar"), "hidden");
+  _setStatus("");
+  _refreshCoins();
+  _refreshBank();
+  _renderGiftTray();
+  _renderPowerBar();
+  _refreshStartBtn();
+}
+
+function _refreshStartBtn() {
+  const cost = _currentCost();
+  const canAfford = Coins.get() >= cost;
+  const btn = el("btn-paer-start");
+  if (!btn) return;
+  btn.disabled = !canAfford;
+  btn.innerHTML = canAfford ?
+    `<i class="bi bi-lightning-charge-fill"></i> ENTER VAULT — <i class="bi bi-coin"></i> ${fmt.coins(cost)}` :
+    `<i class="bi bi-coin"></i> Need ${fmt.coins(cost)} coins`;
+}
   // ── Cash out ───────────────────────────────────────
   function _cashout(needed, coinsGained) {
     if (_bank < needed) return;
@@ -2257,16 +3172,16 @@ function _resetToIdle() {
 
   // ── Open overlay ───────────────────────────────────
   function open() {
-    cls.remove(el("overlay-paer"), "hidden");
-    _bank      = 0;
-    _gifts     = [];
-    _giftId    = 0;
-    _freezeSec = 0;
-    _starSec   = 0;
-    _starMulti = 1;
-    _orbActive = false;
-    _resetToIdle();
-    _initAccordion();
+  cls.remove(el("overlay-paer"), "hidden");
+  _bank = 0;
+  _gifts = [];
+  _giftId = 0;
+  _freezeSec = 0;
+  _starSec = 0;
+  _starMulti = 1;
+  _orbActive = false;
+  _resetToIdle(); // calls _refreshStartBtn internally
+  _initAccordion();
     if (!el("paer-popup-layer")) {
       const lay = document.createElement("div");
       lay.id        = "paer-popup-layer";
@@ -2281,6 +3196,7 @@ function _resetToIdle() {
     el("open-paer")?.addEventListener("click", open);
     el("back-paer")?.addEventListener("click", () => {
       _stopTimer();
+      PaerMusic.stop();
       cls.add(el("overlay-paer"), "hidden");
       const m = el("paer-howto-modal");
       if (m) { cls.remove(m, "visible"); cls.add(m, "hidden"); }
@@ -2288,7 +3204,8 @@ function _resetToIdle() {
       if (r) { cls.remove(r, "visible"); cls.add(r, "hidden"); }
     });
     el("btn-paer-start")?.addEventListener("click", _startGame);
-    el("btn-paer-howto")?.addEventListener("click", _showHowTo);
+    el("btn-paer-mute")?.addEventListener("click", () => _toggleMute(PaerMusic, "paer-mute-icon"));
+el("btn-paer-howto")?.addEventListener("click", _showHowTo);
     el("btn-paer-howto-close")?.addEventListener("click", _closeHowTo);
     el("paer-howto-modal")?.addEventListener("click", e => {
       if (e.target.id === "paer-howto-modal") _closeHowTo();
@@ -2401,6 +3318,17 @@ const Auth = {
 // ═══════════════════════════════════════════════════
 //  BOOT
 // ═══════════════════════════════════════════════════
+function _toggleMute(player, iconId) {
+  const icon = $(iconId);
+  if (player.isPlaying()) {
+    player.stop();
+    if (icon) icon.style.opacity = "0.35";
+  } else {
+    player.play();
+    if (icon) icon.style.opacity = "1";
+  }
+}
+
 const boot = () => {
   Screens.show("screen-splash");
   AuthScreen.init();
@@ -2410,7 +3338,8 @@ const boot = () => {
   LuckyGame.init();
   CaptureGame.init();
   PaerGame.init();
-  onAuthStateChanged(auth, (user) => {
+  TradinPlaza.init();
+onAuthStateChanged(auth, (user) => {
     if (user) {
       Auth.onSignedIn(user);
     } else {
@@ -2424,3 +3353,55 @@ const boot = () => {
 };
 
 boot();
+
+/**
+ * rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+    }
+
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /spins/{spinId} {
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid;
+      allow read: if request.auth != null
+                  && resource.data.uid == request.auth.uid;
+    }
+
+    match /captures/{captureId} {
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid;
+      allow read: if request.auth != null;
+    }
+
+    match /trades/{tradeId} {
+      // Anyone logged in can read all open listings
+      allow read: if request.auth != null;
+
+      // Only the seller can create a listing (sellerId must match their uid)
+      allow create: if request.auth != null
+                    && request.resource.data.sellerId == request.auth.uid;
+
+      // Only the buyer can mark it as sold (status → "sold", buyerId must match)
+      allow update: if request.auth != null
+                    && resource.data.status == "open"
+                    && request.resource.data.status == "sold"
+                    && request.resource.data.buyerId == request.auth.uid;
+
+      // No deletes
+      allow delete: if false;
+    }
+
+  }
+}
+ */
