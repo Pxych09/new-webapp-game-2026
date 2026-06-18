@@ -2571,62 +2571,67 @@ const PaerGame = (() => {
   }
 
   // ── Tile definitions ───────────────────────────────
-  // idx: 0=💎 1=💰 2=💵 3=💣 4=🔥 5=🎁 6=❄️ 7=⭐ 8=🧿
-  const TILE_DEFS = [
-    { emoji:"💎", label:"Diamond",  value: 1000, cls:"diamond", effect:"earn"   },
-    { emoji:"💰", label:"Gold Bag", value:  500, cls:"gold",    effect:"earn"   },
-    { emoji:"💵", label:"Cash",     value:  100, cls:"cash",    effect:"earn"   },
-    { emoji:"💣", label:"Bomb",     value:  -10, cls:"bomb",    effect:"burn"   },
-    { emoji:"🔥", label:"Fire",     value: -100, cls:"fire",    effect:"burn"   },
-    { emoji:"🎁", label:"Gift",     value:    0, cls:"gift",    effect:"gift"   },
-    { emoji:"❄️", label:"Freeze",   value:   15, cls:"freeze",  effect:"freeze" },
-    { emoji:"⭐", label:"Star",     value:   25, cls:"star",    effect:"star",  multi:2 },
-    { emoji:"🧿", label:"Orb",      value:    2, cls:"orb",     effect:"orb"    },
-    { emoji:"🌟", label:"Superstar",value:   25, cls:"superstar",effect:"star", multi:4 },
-  ];
+const TILE_DEFS = [
+  { emoji: "💎", label: "Diamond", value: 1000, cls: "diamond", effect: "earn" }, // idx 0
+  { emoji: "💰", label: "Gold Bag", value: 500, cls: "gold", effect: "earn" }, // idx 1
+  { emoji: "💵", label: "Cash", value: 100, cls: "cash", effect: "earn" }, // idx 2
+  { emoji: "🧨", label: "Firecracker", value: -10, cls: "firecracker", effect: "burn" }, // idx 3
+  { emoji: "💸", label: "Money Fly", value: -100, cls: "moneyfly", effect: "burnfreeze" }, // idx 4 — was 🔥, now also cancels ❄️
+  { emoji: "🎁", label: "Gift", value: 0, cls: "gift", effect: "gift" }, // idx 5
+  { emoji: "❄️", label: "Freeze", value: 15, cls: "freeze", effect: "freeze" }, // idx 6
+  { emoji: "⭐", label: "Star", value: 25, cls: "star", effect: "star", multi: 2 }, // idx 7
+  { emoji: "🧿", label: "Orb", value: 2, cls: "orb", effect: "orb" }, // idx 8
+  { emoji: "🌟", label: "Superstar", value: 25, cls: "superstar", effect: "star", multi: 4 }, // idx 9
+  { emoji: "💣", label: "Bomb", value: -50, cls: "bomb", effect: "burn" }, // idx 10 — was -10, now -50
+  { emoji: "🪙", label: "Coin", value: 300, cls: "coin300", effect: "earn" }, // idx 11 — wave 10+, replaces 💎
+];
 
   // ── Pool builder (wave-aware) ──────────────────────
 function _buildPool(wave) {
   const pool = [];
   
-  // ── Treasures: scale DOWN but never below hard minimums ──
-  // Wave 0:  2💎  5💰  9💵
-  // Wave 1:  2💎  4💰  7💵
-  // Wave 2:  1💎  3💰  5💵
-  // Wave 3+: 1💎  2💰  3💵  ← floor, never goes lower
-  const diamonds = wave === 0 ? 2 : 1;
+  // ── Wave 10+: 🪙 replaces 💎 slot ──────────────────
+  if (wave >= 10) {
+    // 🪙 takes over diamond slot — 1 per board
+    pool.push(11); // 🪙
+  } else {
+    // 💎 standard scaling
+    const diamonds = wave === 0 ? 2 : 1;
+    for (let i = 0; i < diamonds; i++) pool.push(0); // 💎
+  }
+  
+  // 💰 and 💵 — scale down but floor
   const golds = Math.max(2, 5 - wave);
   const cash = Math.max(3, 9 - wave * 2);
-  for (let i = 0; i < diamonds; i++) pool.push(0); // 💎
   for (let i = 0; i < golds; i++) pool.push(1); // 💰
   for (let i = 0; i < cash; i++) pool.push(2); // 💵
   
-  // ── 🎁 Gift: 1% chance, wave 1+ ──
+  // 🎁 gift — 1% chance, wave 1+
   if (wave >= 1 && Math.random() < 0.01) pool.push(5);
   
-  // ── Power-ups: scale UP with wave (more exciting as it gets harder) ──
-  // Wave 0: none  Wave 1: low chance  Wave 3+: reliable
+  // Power-ups — scale up with wave
   if (wave >= 1) {
-    const wf = Math.min(wave, 4); // factor caps at 4 so chances plateau
-    if (Math.random() < 0.15 + wf * 0.06) pool.push(6); // ❄️  max ~39%
-    if (Math.random() < 0.12 + wf * 0.05) pool.push(7); // ⭐  max ~32%
-    if (Math.random() < 0.10 + wf * 0.05) pool.push(8); // 🧿  max ~30%
-    if (Math.random() < 0.04 + wf * 0.02) pool.push(9); // 🌟  max ~12%
+    const wf = Math.min(wave, 4);
+    if (Math.random() < 0.15 + wf * 0.06) pool.push(6); // ❄️
+    if (Math.random() < 0.12 + wf * 0.05) pool.push(7); // ⭐
+    if (Math.random() < 0.10 + wf * 0.05) pool.push(8); // 🧿
+    if (Math.random() < 0.04 + wf * 0.02) pool.push(9); // 🌟
   }
   
-  // ── Hazards: 🔥 grows with wave but is capped so it can't crowd out ──
-  // Slots remaining after treasures + power-ups are split between 💣 and 🔥
-  // 🔥 share grows each wave but never exceeds half the remaining slots
+  // ── Hazards: 🧨 (−10) base filler, 💸 (−100) grows, 💣 (−50) mid-weight ──
   const slotsLeft = 25 - pool.length;
-  const fireShare = wave === 0 ?
-    0 :
-    Math.min(Math.floor(slotsLeft / 2), wave * 2); // max half the remainder
-  const bombShare = slotsLeft - fireShare;
+  // 💸 share grows each wave (was 🔥), capped at half remainder
+  const moneyFlyShare = wave === 0 ? 0 : Math.min(Math.floor(slotsLeft / 2), wave * 2); // idx 4
+  // 💣 (−50) appears from wave 3, grows slowly
+  const bombShare = wave < 3 ? 0 : Math.min(Math.floor(slotsLeft / 4), wave); // idx 10
+  // 🧨 (−10) fills the rest
+  const crackerShare = slotsLeft - moneyFlyShare - bombShare; // idx 3
   
-  for (let i = 0; i < bombShare; i++) pool.push(3); // 💣
-  for (let i = 0; i < fireShare; i++) pool.push(4); // 🔥
+  for (let i = 0; i < crackerShare; i++) pool.push(3); // 🧨
+  for (let i = 0; i < moneyFlyShare; i++) pool.push(4); // 💸
+  for (let i = 0; i < bombShare; i++) pool.push(10); // 💣
   
-  // Safety: pad/trim to exactly 25 (shouldn't be needed but defensive)
+  // Safety pad/trim
   while (pool.length < 25) pool.push(3);
   pool.length = 25;
   
@@ -2687,7 +2692,7 @@ function _buildPool(wave) {
     const parts = [];
 
     if (_freezeSec > 0)
-      parts.push(`<span class="ppb-pill freeze-pill"><span class="ppb-emoji">❄️</span><span class="ppb-txt">${_freezeSec}s frozen${_freezeSec > 0 ? " · 💣🔥 immune" : ""}</span></span>`);
+  parts.push(`<span class="ppb-pill freeze-pill"><span class="ppb-emoji">❄️</span><span class="ppb-txt">${_freezeSec}s frozen · 🧨💣 immune · watch 💸!</span></span>`);
     if (_starSec > 0) {
       const isSuper = _starMulti >= 4;
       parts.push(`<span class="ppb-pill ${isSuper ? "superstar-pill" : "star-pill"}"><span class="ppb-emoji">${isSuper ? "🌟" : "⭐"}</span><span class="ppb-txt">×${_starMulti} for ${_starSec}s</span></span>`);
@@ -2829,8 +2834,9 @@ function _buildPool(wave) {
 
   // ── Tile rendering ─────────────────────────────────
   function _tileSubLabel(def) {
-  if (def.effect === "earn") return `<span class="paer-tile-val">+₱${fmt.coins(def.value)}</span>`;
+  if (def.effect === "earn") return `<span class="paer-tile-val ${def.cls}-val">+₱${fmt.coins(def.value)}</span>`;
   if (def.effect === "burn") return `<span class="paer-tile-val burn-val">−₱${fmt.coins(Math.abs(def.value))}</span>`;
+  if (def.effect === "burnfreeze") return `<span class="paer-tile-val burnfreeze-val">−₱${fmt.coins(Math.abs(def.value))} ❌❄️</span>`;
   if (def.effect === "gift") return `<span class="paer-tile-val gift-val">COLLECT!</span>`;
   if (def.effect === "freeze") return `<span class="paer-tile-val freeze-val">+${def.value}s ❄️</span>`;
   if (def.effect === "star") return `<span class="paer-tile-val ${def.cls === 'superstar' ? 'superstar-val' : 'star-val'}">×${def.multi} ${def.value}s</span>`;
@@ -2885,16 +2891,32 @@ function _buildPool(wave) {
       Sound.win();
 
     } else if (def.effect === "burn") {
-      if (_freezeSec > 0) {
-        // ❄️ immunity — no deduction
-        _showPopup(`❄️ IMMUNE!`, "freeze");
-        Toast.show(`❄️ Freeze blocked ${def.emoji}!`, "info", 1800);
-      } else {
-        _bank = Math.max(0, _bank + def.value);
-        _refreshBank();
-        _showPopup(`${def.emoji} −₱${fmt.coins(Math.abs(def.value))}`, def.cls);
-        Sound.bomb();
-      }
+  if (_freezeSec > 0) {
+    // ❄️ immunity — no deduction
+    _showPopup(`❄️ IMMUNE!`, "freeze");
+    Toast.show(`❄️ Freeze blocked ${def.emoji}!`, "info", 1800);
+  } else {
+    _bank = Math.max(0, _bank + def.value);
+    _refreshBank();
+    _showPopup(`${def.emoji} −₱${fmt.coins(Math.abs(def.value))}`, def.cls);
+    Sound.bomb();
+  }
+  
+} else if (def.effect === "burnfreeze") {
+  // 💸 always deducts AND cancels ❄️ freeze + immunity
+  _bank = Math.max(0, _bank + def.value);
+  _refreshBank();
+  if (_freezeSec > 0) {
+    _freezeSec = 0;
+    _renderPowerBar();
+    _tickTimer(); // update timer display — no longer frozen
+    Toast.show(`💸 Freeze CANCELLED! −₱${fmt.coins(Math.abs(def.value))}`, "loss", 2500);
+    _showPopup(`💸 FREEZE GONE!`, "moneyfly");
+  } else {
+    _showPopup(`💸 −₱${fmt.coins(Math.abs(def.value))}`, "moneyfly");
+    Toast.show(`💸 −₱${fmt.coins(Math.abs(def.value))}`, "loss", 1800);
+  }
+  Sound.bomb();
 
     } else if (def.effect === "gift") {
       _collectGift();
