@@ -2575,63 +2575,80 @@ const TILE_DEFS = [
   { emoji: "💎", label: "Diamond", value: 1000, cls: "diamond", effect: "earn" }, // idx 0
   { emoji: "💰", label: "Gold Bag", value: 500, cls: "gold", effect: "earn" }, // idx 1
   { emoji: "💵", label: "Cash", value: 100, cls: "cash", effect: "earn" }, // idx 2
-  { emoji: "🧨", label: "Firecracker", value: -10, cls: "firecracker", effect: "burn" }, // idx 3
-  { emoji: "💸", label: "Money Fly", value: -100, cls: "moneyfly", effect: "burnfreeze" }, // idx 4 — was 🔥, now also cancels ❄️
+  { emoji: "💣", label: "Bomb", value: -100, cls: "bomb", effect: "burn" }, // idx 3 — −₱100
+  { emoji: "💸", label: "Money Fly", value: -200, cls: "moneyfly", effect: "burn" }, // idx 4 — −₱200, wave 8+
   { emoji: "🎁", label: "Gift", value: 0, cls: "gift", effect: "gift" }, // idx 5
-  { emoji: "❄️", label: "Freeze", value: 15, cls: "freeze", effect: "freeze" }, // idx 6
+  { emoji: "❄️", label: "Freeze", value: 10, cls: "freeze", effect: "freeze" }, // idx 6 — wave 2+
   { emoji: "⭐", label: "Star", value: 25, cls: "star", effect: "star", multi: 2 }, // idx 7
   { emoji: "🧿", label: "Orb", value: 2, cls: "orb", effect: "orb" }, // idx 8
   { emoji: "🌟", label: "Superstar", value: 25, cls: "superstar", effect: "star", multi: 4 }, // idx 9
-  { emoji: "💣", label: "Bomb", value: -50, cls: "bomb", effect: "burn" }, // idx 10 — was -10, now -50
-  { emoji: "🪙", label: "Coin", value: 300, cls: "coin300", effect: "earn" }, // idx 11 — wave 10+, replaces 💎
+  { emoji: "🔥", label: "Fire", value: 0, cls: "fire", effect: "burnfreeze" }, // idx 10 — cancels ❄️ only
+  { emoji: "🪙", label: "Coin", value: 300, cls: "coin300", effect: "earn" }, // idx 11 — wave 8+, replaces 💎
+  { emoji: "🧨", label: "Firecracker", value: -50, cls: "firecracker", effect: "burn" }, // idx 12 — −₱50
 ];
 
   // ── Pool builder (wave-aware) ──────────────────────
 function _buildPool(wave) {
+  // Each slot in the 25-tile grid is assigned by weighted random draw
+  // based on the current wave bracket.
   const pool = [];
   
-  // ── Wave 10+: 🪙 replaces 💎 slot ──────────────────
-  if (wave >= 10) {
-    // 🪙 takes over diamond slot — 1 per board
-    pool.push(11); // 🪙
+  // ── Helper: weighted random pick from a table ──────
+  function weightedDraw(table) {
+    const total = table.reduce((s, r) => s + r.w, 0);
+    let r = Math.random() * total;
+    for (const row of table) { r -= row.w; if (r <= 0) return row.idx; }
+    return table[table.length - 1].idx;
+  }
+  
+  if (wave === 0) {
+    // ── Wave 1: 90% earn [💰💵], 10% hazard [💣🧨] ──
+    const table = [
+      { idx: 1, w: 50 }, // 💰 Gold Bag
+      { idx: 2, w: 40 }, // 💵 Cash
+      { idx: 3, w: 6 }, // 💣 −₱100
+      { idx: 12, w: 4 }, // 🧨 −₱50
+    ];
+    for (let i = 0; i < 25; i++) pool.push(weightedDraw(table));
+    
+  } else if (wave <= 7) {
+    // ── Wave 2–8: 80% earn, 15% hazard, 5% power-up ──
+    const table = [
+      { idx: 1, w: 45 }, // 💰
+      { idx: 2, w: 35 }, // 💵
+      { idx: 3, w: 9 }, // 💣
+      { idx: 12, w: 6 }, // 🧨
+      { idx: 0, w: 2 }, // 💎
+      { idx: 6, w: 1 }, // ❄️
+      { idx: 7, w: 2 }, // ⭐
+    ];
+    for (let i = 0; i < 25; i++) pool.push(weightedDraw(table));
+    
+    // 🎁 rare gift — replace one random slot (1% effective chance per tile ≈ guaranteed ~every 4 waves)
+    if (Math.random() < 0.25) pool[Math.floor(Math.random() * 25)] = 5;
+    
   } else {
-    // 💎 standard scaling
-    const diamonds = wave === 0 ? 2 : 1;
-    for (let i = 0; i < diamonds; i++) pool.push(0); // 💎
+    // ── Wave 8+: 70% earn, 15% hazard, 10% power-up+danger, 4% rare, 1% gift ──
+    const table = [
+      { idx: 11, w: 35 }, // 🪙 ₱300 (replaces 💎)
+      { idx: 2, w: 35 }, // 💵
+      { idx: 3, w: 9 }, // 💣
+      { idx: 12, w: 6 }, // 🧨
+      { idx: 0, w: 3 }, // 💎
+      { idx: 4, w: 4 }, // 💸 −₱200
+      { idx: 6, w: 2 }, // ❄️
+      { idx: 7, w: 2 }, // ⭐
+      { idx: 10, w: 1 }, // 🔥 cancel ❄️
+      { idx: 8, w: 2 }, // 🧿
+      { idx: 9, w: 2 }, // 🌟
+    ];
+    for (let i = 0; i < 25; i++) pool.push(weightedDraw(table));
+    
+    // 🎁 1% chance to inject one gift tile
+    if (Math.random() < 0.01 * 25) pool[Math.floor(Math.random() * 25)] = 5;
   }
   
-  // 💰 and 💵 — scale down but floor
-  const golds = Math.max(2, 5 - wave);
-  const cash = Math.max(3, 9 - wave * 2);
-  for (let i = 0; i < golds; i++) pool.push(1); // 💰
-  for (let i = 0; i < cash; i++) pool.push(2); // 💵
-  
-  // 🎁 gift — 1% chance, wave 1+
-  if (wave >= 1 && Math.random() < 0.01) pool.push(5);
-  
-  // Power-ups — scale up with wave
-  if (wave >= 1) {
-    const wf = Math.min(wave, 4);
-    if (Math.random() < 0.15 + wf * 0.06) pool.push(6); // ❄️
-    if (Math.random() < 0.12 + wf * 0.05) pool.push(7); // ⭐
-    if (Math.random() < 0.10 + wf * 0.05) pool.push(8); // 🧿
-    if (Math.random() < 0.04 + wf * 0.02) pool.push(9); // 🌟
-  }
-  
-  // ── Hazards: 🧨 (−10) base filler, 💸 (−100) grows, 💣 (−50) mid-weight ──
-  const slotsLeft = 25 - pool.length;
-  // 💸 share grows each wave (was 🔥), capped at half remainder
-  const moneyFlyShare = wave === 0 ? 0 : Math.min(Math.floor(slotsLeft / 2), wave * 2); // idx 4
-  // 💣 (−50) appears from wave 3, grows slowly
-  const bombShare = wave < 3 ? 0 : Math.min(Math.floor(slotsLeft / 4), wave); // idx 10
-  // 🧨 (−10) fills the rest
-  const crackerShare = slotsLeft - moneyFlyShare - bombShare; // idx 3
-  
-  for (let i = 0; i < crackerShare; i++) pool.push(3); // 🧨
-  for (let i = 0; i < moneyFlyShare; i++) pool.push(4); // 💸
-  for (let i = 0; i < bombShare; i++) pool.push(10); // 💣
-  
-  // Safety pad/trim
+  // Safety: always exactly 25 tiles
   while (pool.length < 25) pool.push(3);
   pool.length = 25;
   
@@ -2692,7 +2709,7 @@ function _buildPool(wave) {
     const parts = [];
 
     if (_freezeSec > 0)
-  parts.push(`<span class="ppb-pill freeze-pill"><span class="ppb-emoji">❄️</span><span class="ppb-txt">${_freezeSec}s frozen · 🧨💣 immune · watch 💸!</span></span>`);
+  parts.push(`<span class="ppb-pill freeze-pill"><span class="ppb-emoji">❄️</span><span class="ppb-txt">${_freezeSec}s frozen · 💣💸 immune · watch 🔥!</span></span>`);
     if (_starSec > 0) {
       const isSuper = _starMulti >= 4;
       parts.push(`<span class="ppb-pill ${isSuper ? "superstar-pill" : "star-pill"}"><span class="ppb-emoji">${isSuper ? "🌟" : "⭐"}</span><span class="ppb-txt">×${_starMulti} for ${_starSec}s</span></span>`);
@@ -2709,19 +2726,23 @@ function _buildPool(wave) {
 
   // ── Timer ──────────────────────────────────────────
   function _startTimer() {
-    _timerSec = PAER_DURATION_SEC;
-    _tickTimer();
-    _timerHandle = setInterval(() => {
-      if (_freezeSec > 0) {
-        _freezeSec--;
-        _renderPowerBar();
-        return; // tick consumed by freeze — clock doesn't advance
+  _timerSec = PAER_DURATION_SEC;
+  _tickTimer();
+  _timerHandle = setInterval(() => {
+    if (_freezeSec > 0) {
+      _freezeSec--;
+      _renderPowerBar();
+      if (_freezeSec === 0) {
+        _setFrostOverlay(false); // frost lifts when freeze expires
+        _tickTimer();
       }
-      _timerSec--;
-      _tickTimer();
-      if (_timerSec <= 0) _timeUp();
-    }, 1000);
-  }
+      return;
+    }
+    _timerSec--;
+    _tickTimer();
+    if (_timerSec <= 0) _timeUp();
+  }, 1000);
+}
   function _tickTimer() {
     const mm  = String(Math.floor(_timerSec / 60)).padStart(2, "0");
     const ss  = String(_timerSec % 60).padStart(2, "0");
@@ -2743,13 +2764,26 @@ function _buildPool(wave) {
   function _stopTimer() { clearInterval(_timerHandle); _timerHandle = null; }
 
 // ── ❄️ Freeze (+ burn immunity while active) ───────
-  function _applyFreeze(secs) {
-    _freezeSec += secs;
-    _renderPowerBar();
-    _tickTimer();
-    _showPopup(`❄️ +${secs}s freeze!`, "freeze");
-    Toast.show(`❄️ Frozen ${secs}s — immune to 💣🔥!`, "info", 2500);
+  // ── Frost overlay on the grid ──────────────────────
+function _setFrostOverlay(active) {
+  const grid = el("paer-grid");
+  if (!grid) return;
+  if (active) {
+    cls.add(grid, "frosted");
+  } else {
+    cls.remove(grid, "frosted");
   }
+}
+
+// ── ❄️ Freeze (+ burn immunity while active) ───────
+function _applyFreeze(secs) {
+  _freezeSec += secs;
+  _setFrostOverlay(true);
+  _renderPowerBar();
+  _tickTimer();
+  _showPopup(`❄️ +${secs}s freeze!`, "freeze");
+  Toast.show(`❄️ Frozen ${secs}s — immune to 💣💸!`, "info", 2500);
+}
 
   // ── ⭐ / 🌟 Star multiplier ────────────────────────
   // multi: 2 for ⭐, 4 for 🌟
@@ -2833,7 +2867,7 @@ function _buildPool(wave) {
   }
 
   // ── Tile rendering ─────────────────────────────────
-  function _tileSubLabel(def) {
+function _tileSubLabel(def) {
   if (def.effect === "earn") return `<span class="paer-tile-val ${def.cls}-val">+₱${fmt.coins(def.value)}</span>`;
   if (def.effect === "burn") return `<span class="paer-tile-val burn-val">−₱${fmt.coins(Math.abs(def.value))}</span>`;
   if (def.effect === "burnfreeze") return `<span class="paer-tile-val burnfreeze-val">−₱${fmt.coins(Math.abs(def.value))} ❌❄️</span>`;
@@ -2843,7 +2877,6 @@ function _buildPool(wave) {
   if (def.effect === "orb") return `<span class="paer-tile-val orb-val">PEEK</span>`;
   return "";
 }
-
   function _renderGrid(interactive) {
     const grid = el("paer-grid"); if (!grid) return;
     grid.innerHTML = "";
@@ -2903,18 +2936,19 @@ function _buildPool(wave) {
   }
   
 } else if (def.effect === "burnfreeze") {
-  // 💸 always deducts AND cancels ❄️ freeze + immunity
+  // 🔥 always deducts AND cancels ❄️ freeze + immunity
   _bank = Math.max(0, _bank + def.value);
   _refreshBank();
   if (_freezeSec > 0) {
     _freezeSec = 0;
     _renderPowerBar();
-    _tickTimer(); // update timer display — no longer frozen
-    Toast.show(`💸 Freeze CANCELLED! −₱${fmt.coins(Math.abs(def.value))}`, "loss", 2500);
-    _showPopup(`💸 FREEZE GONE!`, "moneyfly");
+    _tickTimer(); // immediately restores normal timer display
+    _setFrostOverlay(false);
+    Toast.show(`🔥 Freeze CANCELLED! −₱${fmt.coins(Math.abs(def.value))}`, "loss", 2500);
+    _showPopup(`🔥 FREEZE GONE!`, "fire");
   } else {
-    _showPopup(`💸 −₱${fmt.coins(Math.abs(def.value))}`, "moneyfly");
-    Toast.show(`💸 −₱${fmt.coins(Math.abs(def.value))}`, "loss", 1800);
+    _showPopup(`🔥 −₱${fmt.coins(Math.abs(def.value))}`, "fire");
+    Toast.show(`🔥 −₱${fmt.coins(Math.abs(def.value))}`, "loss", 1800);
   }
   Sound.bomb();
 
@@ -3041,10 +3075,11 @@ function _buildPool(wave) {
   _stopTimer();
   PaerMusic.stop();
   _phase = "done";
-    _freezeSec = 0;
-    _starSec   = 0;
-    _starMulti = 1;
-    _renderPowerBar();
+  _freezeSec = 0;
+  _starSec = 0;
+  _starMulti = 1;
+  _setFrostOverlay(false);
+  _renderPowerBar();
 
     _tiles.forEach(t => { t.revealed = true; });
     _renderGrid(false);
@@ -3196,6 +3231,7 @@ function _resetToIdle() {
   _starSec = 0;
   _starMulti = 1;
   _orbActive = false;
+  _setFrostOverlay(false);
   _closeResultModal();
   cls.remove(el("paer-start-wrap"), "hidden");
   cls.add(el("paer-grid-wrap"), "hidden");
