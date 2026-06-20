@@ -741,17 +741,30 @@ const _makeCard = (p, isLegend) => {
     const { id, name } = p;
     const isActive = id === currentAvatarId;
     const cardCount = p.count || 1;
+    const reserved = TradinPlaza.getReservedQty(id);
+    const available = Math.max(0, cardCount - reserved);
+    const isFullyListed = reserved > 0 && available === 0;
+    const isPartialListed = reserved > 0 && available > 0;
+    
     const card = document.createElement("div");
-    card.className = "collection-card" + (isLegend ? " legendary-card" : "") + (isActive ? " avatar-active" : "");
+    card.className = "collection-card" +
+      (isLegend ? " legendary-card" : "") +
+      (isActive ? " avatar-active" : "") +
+      (isFullyListed ? " in-trade-full" : "") +
+      (isPartialListed ? " in-trade-partial" : "");
+    
     card.innerHTML = `
         <div class="collection-card-img-wrap">
           <img src="${POKE_ARTWORK_URL(id)}" alt="${name}" loading="lazy" class="collection-card-img" onerror="this.src='${POKE_SPRITE_URL(id)}'" />
         </div>
-        ${isLegend  ? `<span class="collection-legend-badge"><i class="bi bi-gem-fill"></i></span>` : ""}
-        ${isActive  ? `<span class="collection-avatar-badge"><i class="bi bi-person-fill"></i></span>` : ""}
-        ${cardCount > 1 ? `<span class="collection-count-badge">×${cardCount}</span>` : ""}
+        ${isLegend        ? `<span class="collection-legend-badge"><i class="bi bi-gem-fill"></i></span>` : ""}
+        ${isActive        ? `<span class="collection-avatar-badge"><i class="bi bi-person-fill"></i></span>` : ""}
+        ${isFullyListed   ? `<span class="collection-trade-badge"><i class="bi bi-shop-window"></i></span>` : ""}
+        ${isPartialListed ? `<span class="collection-trade-badge partial"><i class="bi bi-shop-window"></i>${reserved}</span>` : ""}
+        ${cardCount > 1   ? `<span class="collection-count-badge">×${cardCount}</span>` : ""}
         <span class="collection-card-name">${name}</span>
         <span class="collection-card-id">#${String(id).padStart(3,"0")}</span>
+        ${isFullyListed   ? `<span class="collection-trade-label">IN TRADING PLAZA</span>` : ""}
         <span class="collection-hold-hint">Hold to set avatar</span>`;
         
       // Long-press / hold detection (works mouse + touch)
@@ -1703,12 +1716,56 @@ const CaptureMusic = (() => {
 //  TRADING PLAZA — marketplace for Pokémon
 // ═══════════════════════════════════════════════════
 const TradinPlaza = (() => {
-  let _cache        = null;
-  let _loading      = false;
-  let _sellerMode   = false;   // is sell modal open?
-  let _selectedPoke = null;    // { id, name, tier, count } being listed
-  let _sellQty      = 1;
-  let _sellPrice    = 100;     // per-unit price
+      let _cache = null;
+      let _loading = false;
+      let _sellerMode = false;
+      let _selectedPoke = null;
+      let _sellQty = 1;
+      let _sellPrice = 100;
+      
+      // ── Reserved quantity helpers ───────────────────────
+      // Returns how many of a given pokemonId are currently listed by this user
+      function _reservedQty(pokemonId) {
+        const reserved = State.userData?.reservedInTrade || [];
+        return reserved
+          .filter(r => r.pokemonId === pokemonId)
+          .reduce((s, r) => s + r.quantity, 0);
+      }
+      // Available = owned count minus what's already in trading plaza
+      function _availableQty(pokemonId) {
+        const col = State.userData?.pokemonCollection || [];
+        const owned = (col.find(p => p.id === pokemonId)?.count) || 0;
+        return Math.max(0, owned - _reservedQty(pokemonId));
+      }
+      // Add a reservation locally + persist
+      async function _addReservation(pokemonId, quantity, tradeId) {
+        const reserved = [...(State.userData?.reservedInTrade || [])];
+        reserved.push({ pokemonId, quantity, tradeId });
+        State.userData.reservedInTrade = reserved;
+        await DB.updateUser(State.user.uid, { reservedInTrade: reserved });
+      }
+      // Remove a reservation locally + persist
+      async function _removeReservation(tradeId) {
+        const reserved = (State.userData?.reservedInTrade || [])
+          .filter(r => r.tradeId !== tradeId);
+        State.userData.reservedInTrade = reserved;
+        await DB.updateUser(State.user.uid, { reservedInTrade: reserved });
+      }
+      // Permanently deduct from collection (called when someone buys your listing)
+      async function _deductFromCollection(pokemonId, quantity) {
+        const col = State.userData?.pokemonCollection || [];
+        const idx = col.findIndex(p => p.id === pokemonId);
+        if (idx === -1) return;
+        const newCount = (col[idx].count || 1) - quantity;
+        let newCol;
+        if (newCount <= 0) {
+          newCol = col.filter((_, i) => i !== idx);
+        } else {
+          newCol = col.map((p, i) => i === idx ? { ...p, count: newCount } : p);
+        }
+        State.userData.pokemonCollection = newCol;
+        await DB.updateUser(State.user.uid, { pokemonCollection: newCol });
+      }
 
   // ── Cache ───────────────────────────────────────────
   async function _load(force=false) {
@@ -1754,11 +1811,13 @@ const TradinPlaza = (() => {
           <span class="tp-card-price"><i class="bi bi-coin"></i> ${fmt.coins(t.totalPrice)}</span>
           <span class="tp-card-unit">${t.quantity>1?`${fmt.coins(t.priceEach)} ea`:"per unit"}</span>
           ${isMe
-            ? `<span class="tp-card-mine-tag">YOUR LISTING</span>`
+            ? `<button class="tp-cancel-btn" id="tp-cancel-${t.id}"><i class="bi bi-x-circle"></i> Remove</button>`
             : `<button class="tp-buy-btn" data-id="${t.id}"><i class="bi bi-bag-fill"></i> BUY</button>`
           }
         </div>`;
-      if (!isMe) {
+      if (isMe) {
+        card.querySelector(`#tp-cancel-${t.id}`)?.addEventListener("click", () => _cancelListing(t));
+      } else {
         card.querySelector(".tp-buy-btn")?.addEventListener("click", () => _promptBuy(t));
       }
       wrap.appendChild(card);
@@ -1804,30 +1863,43 @@ const TradinPlaza = (() => {
     setTimeout(() => modal.classList.add("hidden"), 320);
   }
 
-  function _renderSellGallery(col) {
+function _renderSellGallery(col) {
     const grid = $("tp-sell-gallery"); if (!grid) return;
     grid.innerHTML = "";
     [...col].sort((a,b)=>a.id-b.id).forEach(p => {
-      const isLegend = p.tier==="t2" || TIER2_IDS.has(p.id);
-      const count    = p.count || 1;
-      const card     = document.createElement("button");
-      card.className = "tp-sell-poke" + (_selectedPoke?.id===p.id?" selected":"");
+      const isLegend   = p.tier==="t2" || TIER2_IDS.has(p.id);
+      const totalCount = p.count || 1;
+      const available  = _availableQty(p.id);
+      const reserved   = _reservedQty(p.id);
+      const isLocked   = available === 0;
+
+      const card = document.createElement("button");
+      card.className = "tp-sell-poke"
+        + (_selectedPoke?.id===p.id ? " selected" : "")
+        + (isLocked ? " locked" : "");
+      card.disabled = isLocked;
       card.innerHTML = `
         <img src="${POKE_ARTWORK_URL(p.id)}" alt="${p.name}"
           onerror="this.src='${POKE_SPRITE_URL(p.id)}'"
           loading="lazy" class="tp-sell-img" />
-        ${isLegend?`<span class="tp-sell-gem"><i class="bi bi-gem-fill"></i></span>`:""}
-        ${count>1?`<span class="tp-sell-count">×${count}</span>`:""}
-        <span class="tp-sell-name">${p.name}</span>`;
-      card.addEventListener("click", () => {
-        _selectedPoke = p; _sellQty = 1;
-        _renderSellGallery(col);
-        _renderSellControls();
-      });
+        ${isLegend  ? `<span class="tp-sell-gem"><i class="bi bi-gem-fill"></i></span>` : ""}
+        ${isLocked  ? `<span class="tp-sell-count tp-sell-locked-badge"><i class="bi bi-shop"></i></span>`
+                    : totalCount > 1 ? `<span class="tp-sell-count">×${available}</span>` : ""}
+        <span class="tp-sell-name">${p.name}</span>
+        ${reserved > 0 ? `<span class="tp-sell-reserved-label">Listed: ${reserved}</span>` : ""}`;
+
+      if (!isLocked) {
+        card.addEventListener("click", () => {
+          // Pass available count so qty controls respect it
+          _selectedPoke = { ...p, count: available };
+          _sellQty = 1;
+          _renderSellGallery(col);
+          _renderSellControls();
+        });
+      }
       grid.appendChild(card);
     });
   }
-
   function _renderSellControls() {
     const wrap = $("tp-sell-controls"); if (!wrap) return;
     if (!_selectedPoke) {
@@ -1901,14 +1973,21 @@ const TradinPlaza = (() => {
     if (t) t.innerHTML = `<i class="bi bi-coin"></i> ${fmt.coins(_sellPrice * _sellQty)}`;
   }
 
-  async function _submitListing() {
+async function _submitListing() {
     if (!_selectedPoke) return;
     if (_sellPrice < 100) { Toast.show("Minimum price is 100 coins!", "loss"); return; }
+
+    // Block if no available quantity remains
+    if (_availableQty(_selectedPoke.id) < _sellQty) {
+      Toast.show("Not enough available Pokémon — check your active listings!", "loss");
+      return;
+    }
+
     const btn = $("tp-confirm-list");
     if (btn) { btn.disabled=true; btn.innerHTML=`<span class="spinner-border spinner-border-sm"></span> Listing…`; }
 
     try {
-      await DB.addTrade({
+      const tradeRef = await DB.addTrade({
         sellerId:    State.user.uid,
         sellerName:  State.userData.username || "Trainer",
         sellerAvatar:State.userData.avatar   || "",
@@ -1919,14 +1998,41 @@ const TradinPlaza = (() => {
         priceEach:   _sellPrice,
         totalPrice:  _sellPrice * _sellQty,
       });
+
+      // Reserve the quantity so it can't be sold again until this listing resolves
+      await _addReservation(_selectedPoke.id, _sellQty, tradeRef.id);
+
       Toast.show(`${_selectedPoke.name} listed in the merchant!`, "win", 3000);
       invalidate();
       _closeSellModal();
       render(true);
+
+      // Refresh profile collection display if on profile page
+      ProfilePage.refresh();
     } catch(e) {
-      console.error("List error",e);
+      console.error("List error", e);
       Toast.show("Couldn't list item. Try again.", "loss");
       if (btn) { btn.disabled=false; btn.innerHTML=`<i class="bi bi-shop"></i> LIST IN MERCHANT`; }
+    }
+  }
+// ── Cancel own listing ──────────────────────────────
+  async function _cancelListing(trade) {
+    const btn = $(`tp-cancel-${trade.id}`);
+    if (btn) { btn.disabled=true; btn.innerHTML=`<span class="spinner-border spinner-border-sm"></span>`; }
+    try {
+      // Mark trade as cancelled in Firestore
+      const ref = doc(db, "trades", trade.id);
+      await updateDoc(ref, { status: "cancelled", cancelledAt: serverTimestamp() });
+      // Release the reservation
+      await _removeReservation(trade.id);
+      Toast.show(`${trade.pokemonName} removed from Trading Plaza.`, "info", 3000);
+      invalidate();
+      render(true);
+      ProfilePage.refresh();
+    } catch(e) {
+      console.error("Cancel listing error", e);
+      Toast.show("Couldn't remove listing. Try again.", "loss");
+      if (btn) { btn.disabled=false; btn.innerHTML=`<i class="bi bi-x-circle"></i> Remove`; }
     }
   }
 
@@ -1964,7 +2070,7 @@ const TradinPlaza = (() => {
     setTimeout(() => modal.classList.add("hidden"), 320);
   }
 
-  async function _executeBuy(trade) {
+async function _executeBuy(trade) {
     if (Coins.get() < trade.totalPrice) { Toast.show("Not enough coins!", "loss"); return; }
     const btn = $("tpbm-confirm");
     if (btn) { btn.disabled=true; btn.innerHTML=`<span class="spinner-border spinner-border-sm"></span> Purchasing…`; }
@@ -1973,32 +2079,71 @@ const TradinPlaza = (() => {
       await Coins.deduct(trade.totalPrice);
       await DB.executeTrade(trade.id, State.user.uid, State.userData.username||"Trainer");
 
-      // Add pokemon to buyer's collection
-      const col      = State.userData.pokemonCollection || [];
-      const existing = col.find(p => p.id === trade.pokemonId);
-      const newCol   = existing
-        ? col.map(p => p.id===trade.pokemonId
-            ? { ...p, count:(p.count||1)+trade.quantity }
-            : p)
-        : [...col, { id:trade.pokemonId, name:trade.pokemonName, tier:trade.pokemonTier, count:trade.quantity }];
+      // ── If buyer is also the seller (edge case) skip collection add ──
+      const isSelf = trade.sellerId === State.user.uid;
 
-      State.userData.pokemonCollection = newCol;
-      await DB.updateUser(State.user.uid, {
-        pokemonCollection: newCol,
-        totalCaptures: (State.userData.totalCaptures||0) + trade.quantity,
-      });
+      if (!isSelf) {
+        // Add pokemon to buyer's collection
+        const col      = State.userData.pokemonCollection || [];
+        const existing = col.find(p => p.id === trade.pokemonId);
+        const newCol   = existing
+          ? col.map(p => p.id===trade.pokemonId
+              ? { ...p, count:(p.count||1)+trade.quantity }
+              : p)
+          : [...col, { id:trade.pokemonId, name:trade.pokemonName, tier:trade.pokemonTier, count:trade.quantity }];
+
+        State.userData.pokemonCollection = newCol;
+        await DB.updateUser(State.user.uid, {
+          pokemonCollection: newCol,
+          totalCaptures: (State.userData.totalCaptures||0) + trade.quantity,
+        });
+      }
+
+      // ── Deduct from seller's collection + release reservation ──
+      // We do this via a separate Firestore read of the seller's doc
+      // so the seller's data stays consistent even if they're offline.
+      try {
+        const sellerSnap = await getDoc(doc(db, "users", trade.sellerId));
+        if (sellerSnap.exists()) {
+          const sellerData = sellerSnap.data();
+          // Remove from collection
+          const sellerCol = sellerData.pokemonCollection || [];
+          const idx = sellerCol.findIndex(p => p.id === trade.pokemonId);
+          if (idx !== -1) {
+            const newCount = (sellerCol[idx].count || 1) - trade.quantity;
+            const newSellerCol = newCount <= 0
+              ? sellerCol.filter((_, i) => i !== idx)
+              : sellerCol.map((p, i) => i === idx ? { ...p, count: newCount } : p);
+            // Remove reservation
+            const newReserved = (sellerData.reservedInTrade || [])
+              .filter(r => r.tradeId !== trade.id);
+            await updateDoc(doc(db, "users", trade.sellerId), {
+              pokemonCollection: newSellerCol,
+              reservedInTrade:   newReserved,
+            });
+            // If the seller is the current user, sync local state too
+            if (trade.sellerId === State.user.uid) {
+              State.userData.pokemonCollection = newSellerCol;
+              State.userData.reservedInTrade   = newReserved;
+            }
+          }
+        }
+      } catch(sellerErr) {
+        console.error("Seller collection deduct error:", sellerErr);
+        // Non-fatal — trade still completes
+      }
 
       Toast.show(`${trade.pokemonName} purchased! Check your collection.`, "win", 3500);
       invalidate();
       _closeBuyModal();
       render(true);
+      ProfilePage.refresh();
     } catch(e) {
-      console.error("Buy error",e);
+      console.error("Buy error", e);
       Toast.show("Purchase failed. Try again.", "loss");
       if (btn) { btn.disabled=false; btn.innerHTML=`<i class="bi bi-check-circle-fill"></i> YES, PURCHASE`; }
     }
   }
-
   function init() {
     $("btn-tp-sell")?.addEventListener("click", openSellModal);
     $("tp-sell-modal")?.addEventListener("click", e => { if(e.target.id==="tp-sell-modal") _closeSellModal(); });
@@ -2008,7 +2153,7 @@ const TradinPlaza = (() => {
 $("tpbm-cancel-bottom")?.addEventListener("click", _closeBuyModal);
   }
 
-  return { render, invalidate, init };
+  return { render, invalidate, init, getReservedQty: _reservedQty };
 })();
 
 // ═══════════════════════════════════════════════════
