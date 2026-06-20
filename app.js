@@ -706,8 +706,22 @@ const ProfilePage = {
       if (e.target.id === "avatar-confirm-modal") this._closeAvatarModal();
     });
   },
-  refresh() {
-    if (!State.userData) return;
+  async refresh() {
+    if (!State.user || !State.userData) return;
+
+    // Always re-fetch from Firestore so counts reflect trades
+    // that happened while the user was on another page/tab.
+    try {
+      const fresh = await DB.getUser(State.user.uid);
+      if (fresh) {
+        // Preserve local coin value (already authoritative from Coins module)
+        fresh.coins = State.userData.coins ?? fresh.coins;
+        Object.assign(State.userData, fresh);
+      }
+    } catch(e) {
+      console.warn("Profile refresh: could not re-fetch user data", e);
+    }
+
     const d = State.userData, av = parseAvatar(d.avatar);
     if ($("acc-username"))    $("acc-username").textContent    = d.username || "—";
     if ($("acc-coins"))       $("acc-coins").textContent       = fmt.coins(d.coins) + " coins";
@@ -738,49 +752,80 @@ const ProfilePage = {
     const currentAvatarId = parseAvatar(State.userData?.avatar)?.id;
 
 const _makeCard = (p, isLegend) => {
-    const { id, name } = p;
-    const isActive = id === currentAvatarId;
-    const cardCount = p.count || 1;
-    const reserved = TradinPlaza.getReservedQty(id);
-    const available = Math.max(0, cardCount - reserved);
-    const isFullyListed = reserved > 0 && available === 0;
-    const isPartialListed = reserved > 0 && available > 0;
-    
-    const card = document.createElement("div");
-    card.className = "collection-card" +
-      (isLegend ? " legendary-card" : "") +
-      (isActive ? " avatar-active" : "") +
-      (isFullyListed ? " in-trade-full" : "") +
-      (isPartialListed ? " in-trade-partial" : "");
-    
-    card.innerHTML = `
+  const { id, name } = p;
+  const isActive = id === currentAvatarId;
+  const cardCount = p.count || 1;
+  const reserved = TradinPlaza.getReservedQty(id);
+  const available = Math.max(0, cardCount - reserved);
+  const isFullyListed = reserved > 0 && available === 0;
+  const isPartialListed = reserved > 0 && available > 0;
+  
+  const card = document.createElement("div");
+  card.className = "collection-card" +
+    (isLegend ? " legendary-card" : "") +
+    (isActive ? " avatar-active" : "") +
+    (isFullyListed ? " in-trade-full" : "") +
+    (isPartialListed ? " in-trade-partial" : "");
+  
+  // cardCount = total owned, available = not listed
+  // Only show ×count badge if total > 1
+  card.innerHTML = `
         <div class="collection-card-img-wrap">
-          <img src="${POKE_ARTWORK_URL(id)}" alt="${name}" loading="lazy" class="collection-card-img" onerror="this.src='${POKE_SPRITE_URL(id)}'" />
+          <img src="${POKE_ARTWORK_URL(id)}" alt="${name}" loading="lazy"
+            class="collection-card-img"
+            onerror="this.src='${POKE_SPRITE_URL(id)}'"
+            draggable="false" />
         </div>
         ${isLegend        ? `<span class="collection-legend-badge"><i class="bi bi-gem-fill"></i></span>` : ""}
         ${isActive        ? `<span class="collection-avatar-badge"><i class="bi bi-person-fill"></i></span>` : ""}
         ${isFullyListed   ? `<span class="collection-trade-badge"><i class="bi bi-shop-window"></i></span>` : ""}
-        ${isPartialListed ? `<span class="collection-trade-badge partial"><i class="bi bi-shop-window"></i>${reserved}</span>` : ""}
-        ${cardCount > 1   ? `<span class="collection-count-badge">×${cardCount}</span>` : ""}
+        ${isPartialListed ? `<span class="collection-trade-badge partial"><i class="bi bi-shop-window"></i> ${reserved}</span>` : ""}
+        ${cardCount > 1
+          ? `<span class="collection-count-badge">×${cardCount}${reserved > 0 ? ` <span style="opacity:.6;font-size:.8em">(${available} free)</span>` : ""}</span>`
+          : ""}
         <span class="collection-card-name">${name}</span>
         <span class="collection-card-id">#${String(id).padStart(3,"0")}</span>
         ${isFullyListed   ? `<span class="collection-trade-label">IN TRADING PLAZA</span>` : ""}
         <span class="collection-hold-hint">Hold to set avatar</span>`;
-        
-      // Long-press / hold detection (works mouse + touch)
-      let holdTimer = null;
-      const startHold = () => { holdTimer = setTimeout(() => this._promptAvatar(id, name), 600); };
-      const cancelHold = () => clearTimeout(holdTimer);
-      card.addEventListener("mousedown",   startHold);
-      card.addEventListener("touchstart",  startHold,  { passive:true });
-      card.addEventListener("mouseup",     cancelHold);
-      card.addEventListener("mouseleave",  cancelHold);
-      card.addEventListener("touchend",    cancelHold);
-      card.addEventListener("touchcancel", cancelHold);
-
-      return card;
-    };
-
+  
+  // ── Long-press / hold — works on the ENTIRE card ──────────────
+  // Prevent native text-selection and image-drag on all children
+  // so the hold gesture fires regardless of where the finger lands.
+  let holdTimer = null;
+  let didFire = false;
+  
+  const startHold = (e) => {
+    didFire = false;
+    // Prevent the browser from selecting text or showing a copy menu
+    e.preventDefault();
+    holdTimer = setTimeout(() => {
+      didFire = true;
+      this._promptAvatar(id, name);
+    }, 600);
+  };
+  
+  const cancelHold = () => {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+  };
+  
+  // Mouse
+  card.addEventListener("mousedown", startHold);
+  card.addEventListener("mouseup", cancelHold);
+  card.addEventListener("mouseleave", cancelHold);
+  
+  // Touch — preventDefault on touchstart blocks the long-press
+  // copy menu on mobile browsers
+  card.addEventListener("touchstart", startHold, { passive: false });
+  card.addEventListener("touchend", cancelHold);
+  card.addEventListener("touchcancel", cancelHold);
+  card.addEventListener("touchmove", cancelHold); // dragging = cancel
+  
+  // Block context menu (right-click / long-tap copy menu)
+  card.addEventListener("contextmenu", (e) => e.preventDefault());
+  
+  return card;
+};
     // ── Legendary / Epic section ──
     if (legends.length) {
       const legendHeader = document.createElement("div");
