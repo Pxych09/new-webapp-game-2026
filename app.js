@@ -2006,9 +2006,9 @@ async function _submitListing() {
       invalidate();
       _closeSellModal();
       render(true);
-
-      // Refresh profile collection display if on profile page
       ProfilePage.refresh();
+      PokemonMasters.invalidate();
+      PokemonMasters.render(true);
     } catch(e) {
       console.error("List error", e);
       Toast.show("Couldn't list item. Try again.", "loss");
@@ -2029,6 +2029,8 @@ async function _submitListing() {
       invalidate();
       render(true);
       ProfilePage.refresh();
+      PokemonMasters.invalidate();
+      PokemonMasters.render(true);
     } catch(e) {
       console.error("Cancel listing error", e);
       Toast.show("Couldn't remove listing. Try again.", "loss");
@@ -2099,45 +2101,55 @@ async function _executeBuy(trade) {
         });
       }
 
-      // ── Deduct from seller's collection + release reservation ──
-      // We do this via a separate Firestore read of the seller's doc
-      // so the seller's data stays consistent even if they're offline.
-      try {
-        const sellerSnap = await getDoc(doc(db, "users", trade.sellerId));
-        if (sellerSnap.exists()) {
-          const sellerData = sellerSnap.data();
-          // Remove from collection
-          const sellerCol = sellerData.pokemonCollection || [];
-          const idx = sellerCol.findIndex(p => p.id === trade.pokemonId);
-          if (idx !== -1) {
-            const newCount = (sellerCol[idx].count || 1) - trade.quantity;
-            const newSellerCol = newCount <= 0
-              ? sellerCol.filter((_, i) => i !== idx)
-              : sellerCol.map((p, i) => i === idx ? { ...p, count: newCount } : p);
-            // Remove reservation
-            const newReserved = (sellerData.reservedInTrade || [])
-              .filter(r => r.tradeId !== trade.id);
-            await updateDoc(doc(db, "users", trade.sellerId), {
-              pokemonCollection: newSellerCol,
-              reservedInTrade:   newReserved,
-            });
-            // If the seller is the current user, sync local state too
-            if (trade.sellerId === State.user.uid) {
-              State.userData.pokemonCollection = newSellerCol;
-              State.userData.reservedInTrade   = newReserved;
-            }
-          }
-        }
-      } catch(sellerErr) {
-        console.error("Seller collection deduct error:", sellerErr);
-        // Non-fatal — trade still completes
-      }
+// ── Deduct from seller's collection + release reservation ──
+try {
+  const sellerRef = doc(db, "users", trade.sellerId);
+  const sellerSnap = await getDoc(sellerRef);
+  
+  if (sellerSnap.exists()) {
+    const sellerData = sellerSnap.data();
+    
+    // 1. Remove from seller's pokemonCollection
+    const sellerCol = sellerData.pokemonCollection || [];
+    const idx = sellerCol.findIndex(p => p.id === trade.pokemonId);
+    let newSellerCol = sellerCol;
+    
+    if (idx !== -1) {
+      const newCount = (sellerCol[idx].count || 1) - trade.quantity;
+      newSellerCol = newCount <= 0 ?
+        sellerCol.filter((_, i) => i !== idx) :
+        sellerCol.map((p, i) => i === idx ? { ...p, count: newCount } : p);
+    }
+    
+    // 2. Remove the matching reservation entry
+    const newReserved = (sellerData.reservedInTrade || [])
+      .filter(r => r.tradeId !== trade.id);
+    
+    // 3. Write both fields together atomically
+    await updateDoc(sellerRef, {
+      pokemonCollection: newSellerCol,
+      reservedInTrade: newReserved,
+    });
+    
+    // 4. If the seller happens to be the current logged-in user,
+    //    sync local State immediately so UI reflects the change
+    if (trade.sellerId === State.user.uid) {
+      State.userData.pokemonCollection = newSellerCol;
+      State.userData.reservedInTrade = newReserved;
+    }
+  }
+} catch (sellerErr) {
+  console.error("Seller collection deduct error:", sellerErr);
+  // Non-fatal — the trade coin transfer already completed above
+}
 
-      Toast.show(`${trade.pokemonName} purchased! Check your collection.`, "win", 3500);
-      invalidate();
-      _closeBuyModal();
-      render(true);
-      ProfilePage.refresh();
+Toast.show(`${trade.pokemonName} purchased! Check your collection.`, "win", 3500);
+invalidate();
+_closeBuyModal();
+render(true);
+ProfilePage.refresh();
+PokemonMasters.invalidate();
+PokemonMasters.render(true);
     } catch(e) {
       console.error("Buy error", e);
       Toast.show("Purchase failed. Try again.", "loss");
@@ -2616,7 +2628,9 @@ CaptureMusic.play();
 
     Cache.set("recentCaptures", null);
     DashPage._candidatesLoaded = false;
-
+    PokemonMasters.invalidate();
+    PokemonMasters.render(true);
+    
     this._refreshCoins();
   },
 
