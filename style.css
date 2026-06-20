@@ -2441,6 +2441,90 @@ a { color: var(--cyan); text-decoration: none; }
   box-shadow: 0 0 16px rgba(0,245,228,0.3) !important;
 }
 
+/* ── In Trading Plaza indicators ── */
+.collection-card.in-trade-full {
+  border-color: var(--gold) !important;
+  opacity: 0.75;
+}
+.collection-card.in-trade-partial {
+  border-color: rgba(255,215,0,0.5) !important;
+}
+.collection-trade-badge {
+  position: absolute;
+  top: 5px; left: 5px;
+  background: var(--gold);
+  color: #000;
+  border-radius: 50%;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .5rem;
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(255,215,0,0.6);
+  z-index: 2;
+  gap: 2px;
+  padding: 0 3px;
+  border-radius: 10px;
+  width: auto;
+}
+.collection-trade-badge.partial {
+  background: rgba(255,215,0,0.85);
+}
+.collection-trade-label {
+  position: absolute;
+  bottom: 18px; left: 0; right: 0;
+  background: rgba(255,215,0,0.15);
+  border-top: 1px solid rgba(255,215,0,0.3);
+  color: var(--gold);
+  font-family: var(--font-mono);
+  font-size: .38rem;
+  letter-spacing: .5px;
+  text-align: center;
+  padding: 2px 1px;
+  z-index: 2;
+}
+
+/* ── Sell gallery: locked (fully listed) state ── */
+.tp-sell-poke.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--gold);
+}
+.tp-sell-locked-badge {
+  background: var(--gold) !important;
+  color: #000 !important;
+}
+.tp-sell-reserved-label {
+  font-family: var(--font-mono);
+  font-size: .42rem;
+  color: var(--gold);
+  letter-spacing: .5px;
+  text-align: center;
+  width: 100%;
+  padding: 0 2px;
+}
+
+/* ── Cancel listing button ── */
+.tp-cancel-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--magenta);
+  border-radius: 50px;
+  color: var(--magenta);
+  font-family: var(--font-display);
+  font-size: .58rem;
+  font-weight: 700;
+  letter-spacing: .8px;
+  cursor: pointer;
+  transition: all .2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.tp-cancel-btn:hover {
+  background: var(--magenta-dim);
+  box-shadow: 0 0 12px rgba(255,45,142,0.3);
+}
 /* ═══════════════════════════════════════════════════
    AVATAR CONFIRM MODAL
 ═══════════════════════════════════════════════════ */
