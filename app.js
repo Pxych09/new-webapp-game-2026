@@ -80,7 +80,7 @@ const LUCKY_PARTIAL_WIN = 5;
 
 const DAILY_REWARD = 100;
 const MS_PER_DAY  = 86_400_000;
-const MS_PER_WEEK = 7 * MS_PER_DAY;
+const MS_PER_WEEK = 3 * MS_PER_DAY;
 
 // ── History constants ──────────────────────────────
 const HISTORY_LIMIT = 5; // items shown & fetched from Firestore
@@ -2587,10 +2587,10 @@ const CaptureGame = {
       const nextCost = this._nextPaidCost();
       const msLeft   = this._msUntilReset();
 
-      if (statusEl) statusEl.innerHTML = this._tier === "t1"
-        ? `<span class="capture-status-badge used"><i class="bi bi-check-circle-fill"></i> TODAY'S FREE THROW USED</span>
-           <p class="capture-status-sub">Resets in <strong>${fmt.countdown(msLeft)}</strong> — or throw again for <strong>${fmt.coins(nextCost)} coins</strong></p>`
-        : `<span class="capture-status-badge used-legendary"><i class="bi bi-check-circle-fill"></i> THIS WEEK'S FREE THROW USED</span>
+      if (statusEl) statusEl.innerHTML = this._tier === "t1" ?
+  `<span class="capture-status-badge used"><i class="bi bi-check-circle-fill"></i> TODAY'S FREE THROW USED</span>
+           <p class="capture-status-sub">Resets in <strong>${fmt.countdown(msLeft)}</strong> — or throw again for <strong>${fmt.coins(nextCost)} coins</strong></p>` :
+  `<span class="capture-status-badge used-legendary"><i class="bi bi-check-circle-fill"></i> THIS PERIOD'S FREE THROW USED</span>
            <p class="capture-status-sub">Resets in <strong>${fmt.countdown(msLeft)}</strong> — or throw again for <strong>${fmt.coins(nextCost)} coins</strong></p>`;
 
       if (ballsWrap) cls.add(ballsWrap, "hidden");
