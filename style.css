@@ -280,6 +280,107 @@ a { color: var(--cyan); text-decoration: none; }
 .about-section { margin-bottom: 28px; }
 .about-text { font-size: .88rem; color: var(--text-dim); line-height: 1.8; border-left: 2px solid var(--cyan); padding-left: 14px; }
 
+/* ── WEEKLY UPDATES ── */
+.weekly-updates-section { margin-bottom: 28px; }
+
+.weekly-updates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wu-card {
+  background: var(--panel);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color .2s;
+}
+.wu-card:hover { border-color: var(--border-hi); }
+
+.wu-card-latest {
+  border-color: var(--cyan);
+  box-shadow: 0 0 20px rgba(0,245,228,0.08);
+}
+
+.wu-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(90deg, rgba(0,245,228,0.04), transparent);
+}
+.wu-card-latest .wu-card-header {
+  background: linear-gradient(90deg, rgba(0,245,228,0.07), transparent);
+}
+
+.wu-version-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wu-version {
+  font-family: var(--font-display);
+  font-size: .82rem;
+  font-weight: 900;
+  color: var(--cyan);
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(0,245,228,0.3);
+}
+.wu-badge-latest {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--cyan);
+  color: #000;
+  font-family: var(--font-display);
+  font-size: .52rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 2px 8px;
+  border-radius: 50px;
+  box-shadow: 0 0 10px rgba(0,245,228,0.35);
+}
+.wu-badge-latest .bi { font-size: .5rem; }
+
+.wu-date {
+  font-family: var(--font-mono);
+  font-size: .62rem;
+  color: var(--text-dim);
+  letter-spacing: .5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.wu-date .bi { font-size: .6rem; }
+
+.wu-items {
+  list-style: none;
+  padding: 10px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.wu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: .8rem;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+.wu-item-icon {
+  flex-shrink: 0;
+  font-size: .9rem;
+  margin-top: 1px;
+  line-height: 1;
+}
+.wu-item-text { flex: 1; }
+
 .home-games { margin-bottom: 28px; }
 .home-game-grid { display: flex; flex-direction: column; gap: 10px; }
 .home-game-card { display: flex; align-items: center; gap: 14px; background: var(--panel); border: 1px solid var(--border-hi); border-radius: var(--radius); padding: 14px 16px; cursor: pointer; transition: border-color .2s, transform .15s; }
