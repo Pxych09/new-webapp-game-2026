@@ -533,6 +533,64 @@ render();
 })();
 
 // ═══════════════════════════════════════════════════
+//  HISTORY MANAGER — intercepts device/browser back
+//  to close overlays instead of exiting the app
+// ═══════════════════════════════════════════════════
+const HistoryManager = {
+  _active: null, // id of the currently pushed overlay, or null
+  
+  // Call this when an overlay opens
+  push(overlayId) {
+    this._active = overlayId;
+    history.pushState({ overlay: overlayId }, "", "");
+  },
+  
+  // Call this when an overlay closes programmatically
+  // (so the fake history entry doesn't linger)
+  pop() {
+    if (this._active) {
+      this._active = null;
+      // Only go back if our state is actually on top
+      if (history.state?.overlay) history.back();
+    }
+  },
+  
+  init() {
+    window.addEventListener("popstate", (e) => {
+      // Device/browser back was pressed
+      if (this._active) {
+        const id = this._active;
+        this._active = null;
+        this._closeOverlay(id);
+      }
+    });
+  },
+  
+  _closeOverlay(id) {
+    switch (id) {
+      case "fruit":
+        FruitMusic.stop();
+        cls.add($("overlay-fruit"), "hidden");
+        HomeMusic.play();
+        break;
+      case "lucky":
+        LuckyMusic.stop();
+        cls.add($("overlay-lucky"), "hidden");
+        HomeMusic.play();
+        break;
+      case "capture":
+        CaptureMusic.stop();
+        CaptureGame._closeOverlay();
+        HomeMusic.play();
+        break;
+      case "paer":
+        PaerGame.closeFromBack();
+        break;
+    }
+  },
+};
+
+// ═══════════════════════════════════════════════════
 //  ROUTER / NAV
 // ═══════════════════════════════════════════════════
 const Router = {
@@ -1125,7 +1183,12 @@ const FruitGame = {
   init() {
     FruitGrid.render();
     $("btn-fruit-spin")?.addEventListener("click", () => this.spin());
-    $("back-fruit")?.addEventListener("click",    () => { FruitMusic.stop(); cls.add($("overlay-fruit"),"hidden"); HomeMusic.play(); });
+    $("back-fruit")?.addEventListener("click", () => {
+      FruitMusic.stop();
+      cls.add($("overlay-fruit"), "hidden");
+      HomeMusic.play();
+      HistoryManager.pop();
+    });
     $("btn-fruit-mute")?.addEventListener("click", () => _toggleMute(FruitMusic, "fruit-mute-icon"));
     $("open-fruit")?.addEventListener("click",    () => this.open());
   },
@@ -1133,7 +1196,8 @@ const FruitGame = {
     cls.remove($("overlay-fruit"),"hidden"); FruitGrid.render(); FruitGrid.clearLit();
     cls.add($("fruit-result"),"hidden"); this._refreshCoins(); this._loadHistory();
     HomeMusic.stop();
-FruitMusic.play();
+    FruitMusic.play();
+    HistoryManager.push("fruit");
   },
   _refreshCoins() { const el=$("fruit-coins-display"); if(el) el.textContent=fmt.coins(Coins.get()); },
 
@@ -1216,13 +1280,26 @@ FruitMusic.play();
 const LuckyGame = {
   init() {
     $("btn-lucky-pull")?.addEventListener("click", () => this.pull());
-    $("back-lucky")?.addEventListener("click",     () => { LuckyMusic.stop(); cls.add($("overlay-lucky"),"hidden"); HomeMusic.play(); });
+    $("back-lucky")?.addEventListener("click", () => {
+      LuckyMusic.stop();
+      cls.add($("overlay-lucky"), "hidden");
+      HomeMusic.play();
+      HistoryManager.pop();
+    });
     $("btn-lucky-mute")?.addEventListener("click", () => _toggleMute(LuckyMusic, "lucky-mute-icon"));
     $("open-lucky")?.addEventListener("click",     () => this.open());
     this._buildReels();
   },
-  open() { cls.remove($("overlay-lucky"),"hidden"); cls.add($("lucky-result"),"hidden"); this._refreshCoins(); this._loadHistory(); this._resetReels(); HomeMusic.stop();
-LuckyMusic.play(); },
+  open() {
+  cls.remove($("overlay-lucky"), "hidden");
+  cls.add($("lucky-result"), "hidden");
+  this._refreshCoins();
+  this._loadHistory();
+  this._resetReels();
+  HomeMusic.stop();
+  LuckyMusic.play();
+  HistoryManager.push("lucky");
+  },
   _refreshCoins() { const el=$("lucky-coins-display"); if(el) el.textContent=fmt.coins(Coins.get()); },
   _buildReels() {
     for(let r=0;r<3;r++){
@@ -2053,11 +2130,11 @@ async function _submitListing() {
     if (_sellPrice < 100) { Toast.show("Minimum price is 100 coins!", "loss"); return; }
 
     // Validate quantity against total owned
-    const totalOwned = (_selectedPoke.count || 1);
-    if (_sellQty < 1 || _sellQty > totalOwned) {
-      Toast.show("Invalid quantity.", "loss");
-      return;
-    }
+const totalOwned = (_selectedPoke.count || 1);
+if (_sellQty < 1 || _sellQty > totalOwned) {
+  Toast.show("Invalid quantity.", "loss");
+  return;
+}
 
     const btn = $("tp-confirm-list");
     if (btn) { btn.disabled=true; btn.innerHTML=`<span class="spinner-border spinner-border-sm"></span> Listing…`; }
@@ -2386,7 +2463,12 @@ const CaptureGame = {
 
   init() {
     $("open-capture")?.addEventListener("click",        () => this.open());
-    $("back-capture")?.addEventListener("click",        () => { CaptureMusic.stop(); this._closeOverlay(); HomeMusic.play(); });
+    $("back-capture")?.addEventListener("click", () => {
+      CaptureMusic.stop();
+      this._closeOverlay();
+      HomeMusic.play();
+      HistoryManager.pop();
+    });
     $("btn-capture-again")?.addEventListener("click",   () => this._resetForNewThrow());
     $("btn-capture-mute")?.addEventListener("click", () => {
       const icon = $("capture-mute-icon");
@@ -2422,10 +2504,11 @@ const CaptureGame = {
   this._renderState();
   this._showHowToModal();
   PokemonMasters.render();
-TradinPlaza.render();
-HomeMusic.stop();
-CaptureMusic.play();
-},
+  TradinPlaza.render();
+  HomeMusic.stop();
+  CaptureMusic.play();
+  HistoryManager.push("capture");
+  },
 
   _closeOverlay() {
     cls.add($("overlay-capture"), "hidden");
@@ -3540,15 +3623,16 @@ function _refreshStartBtn() {
   _starSec = 0;
   _starMulti = 1;
   _orbActive = false;
-  _resetToIdle(); // calls _refreshStartBtn internally
+  _resetToIdle();
   _initAccordion();
-    if (!el("paer-popup-layer")) {
-      const lay = document.createElement("div");
-      lay.id        = "paer-popup-layer";
-      lay.className = "paer-popup-layer";
-      el("overlay-paer")?.appendChild(lay);
-    }
-    _showHowTo();
+  if (!el("paer-popup-layer")) {
+    const lay = document.createElement("div");
+    lay.id = "paer-popup-layer";
+    lay.className = "paer-popup-layer";
+    el("overlay-paer")?.appendChild(lay);
+  }
+  _showHowTo();
+  HistoryManager.push("paer");
   }
 
   // ── Boot init ──────────────────────────────────────
@@ -3563,6 +3647,7 @@ function _refreshStartBtn() {
       if (m) { cls.remove(m, "visible"); cls.add(m, "hidden"); }
       const r = el("paer-result-modal");
       if (r) { cls.remove(r, "visible"); cls.add(r, "hidden"); }
+      HistoryManager.pop();
     });
     el("btn-paer-start")?.addEventListener("click", _startGame);
     el("btn-paer-mute")?.addEventListener("click", () => _toggleMute(PaerMusic, "paer-mute-icon"));
@@ -3579,7 +3664,18 @@ el("btn-paer-howto")?.addEventListener("click", _showHowTo);
     });
   }
 
-  return { init, open };
+  function closeFromBack() {
+    _stopTimer();
+    PaerMusic.stop();
+    cls.add(el("overlay-paer"), "hidden");
+    HomeMusic.play();
+    const m = el("paer-howto-modal");
+    if (m) { cls.remove(m, "visible"); cls.add(m, "hidden"); }
+    const r = el("paer-result-modal");
+    if (r) { cls.remove(r, "visible"); cls.add(r, "hidden"); }
+  }
+
+  return { init, open, closeFromBack };;
 })();
 
 // ═══════════════════════════════════════════════════
@@ -3717,6 +3813,7 @@ function _toggleMute(player, iconId) {
 
 const boot = () => {
   Screens.show("screen-splash");
+  HistoryManager.init();
   AuthScreen.init();
   DashPage.bindTabs();
   ProfilePage.init();
@@ -3725,7 +3822,7 @@ const boot = () => {
   CaptureGame.init();
   PaerGame.init();
   TradinPlaza.init();
-onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, (user) => {
     if (user) {
       Auth.onSignedIn(user);
     } else {
