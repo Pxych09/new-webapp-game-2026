@@ -94,7 +94,8 @@ const WEEKLY_UPDATES = [
       { icon: "bi-shield-fill-check", color: "var(--cyan)",    text: "Device back button now closes game overlays instead of exiting the app" },
       { icon: "bi-collection-fill",   color: "var(--poke-red)",text: "Pokémon Collection gallery redesigned with paginated 3×3 grid" },
       { icon: "bi-shop-window",       color: "var(--cyan)",    text: "Trading Plaza: all owned Pokémon are now always listable" },
-      { icon: "bi-gem",          color: "var(--gold)",    text: "Legendary free throw reset reduced from 7 days to 3 days" },
+      { icon: "bi-gem-fill",          color: "var(--gold)",    text: "Legendary free throw reset reduced from 7 days to 3 days" },
+      { icon: "bi-layers-fill", color: "var(--paer)", text: "Dashboard now tracks Pæir a Pæra vault runs, best wave reached, and best bank" },
     ],
   },
   {
@@ -876,7 +877,10 @@ const ProfilePage = {
     if ($("acc-fruit-spins")) $("acc-fruit-spins").textContent = fmt.coins(d.totalFruitSpins || 0);
     if ($("acc-lucky-spins")) $("acc-lucky-spins").textContent = fmt.coins(d.totalLuckySpins || 0);
     if ($("acc-captures"))    $("acc-captures").textContent    = fmt.coins(d.totalCaptures || 0);
-    if ($("acc-best-win"))    $("acc-best-win").textContent    = fmt.coins(d.bestWin || 0) + " coins";
+    if ($("acc-best-win")) $("acc-best-win").textContent = fmt.coins(d.bestWin || 0) + " coins";
+    if ($("acc-paer-runs")) $("acc-paer-runs").textContent = fmt.coins(d.paerTotalRuns || 0);
+    if ($("acc-paer-wave")) $("acc-paer-wave").textContent = `Wave ${d.paerBestWave || 0}`;
+    if ($("acc-paer-bank")) $("acc-paer-bank").textContent = `₱${fmt.coins(d.paerBestBank || 0)}`;
     if ($("acc-since")) {
       const ts = toDate(d.createdAt);
       $("acc-since").textContent = ts ? fmt.date(ts) : "—";
@@ -1095,7 +1099,10 @@ const DashPage = {
     if ($("stat-fruit-spins"))  $("stat-fruit-spins").textContent  = fmt.coins(d.totalFruitSpins||0);
     if ($("stat-lucky-spins"))  $("stat-lucky-spins").textContent  = fmt.coins(d.totalLuckySpins||0);
     if ($("stat-captures"))     $("stat-captures").textContent     = fmt.coins(d.totalCaptures||0);
-    if ($("stat-best-win"))     $("stat-best-win").textContent     = fmt.coins(d.bestWin||0);
+    if ($("stat-best-win")) $("stat-best-win").textContent = fmt.coins(d.bestWin || 0);
+    if ($("stat-paer-runs")) $("stat-paer-runs").textContent = fmt.coins(d.paerTotalRuns || 0);
+    if ($("stat-paer-wave")) $("stat-paer-wave").textContent = `W${d.paerBestWave||0}`;
+    if ($("stat-paer-bank")) $("stat-paer-bank").textContent = `₱${fmt.coins(d.paerBestBank||0)}`;
 
     const tasks = [];
     if (!this._leaderboardLoaded) tasks.push(this.loadLeaderboard());
@@ -3494,9 +3501,22 @@ function _tileSubLabel(def) {
     _renderGiftTray();
 
     if (State.user && State.userData) {
-      const newBest = Math.max(State.userData.bestWin || 0, _bank);
-      State.userData.bestWin = newBest;
-      DB.updateUser(State.user.uid, { bestWin: newBest }).catch(() => {});
+      const newBestWin = Math.max(State.userData.bestWin || 0, _bank);
+      const newBestWave = Math.max(State.userData.paerBestWave || 0, _wave + 1);
+      const newBestBank = Math.max(State.userData.paerBestBank || 0, _bank);
+      const newTotalRuns = (State.userData.paerTotalRuns || 0) + 1;
+      
+      State.userData.bestWin = newBestWin;
+      State.userData.paerBestWave = newBestWave;
+      State.userData.paerBestBank = newBestBank;
+      State.userData.paerTotalRuns = newTotalRuns;
+      
+      DB.updateUser(State.user.uid, {
+        bestWin: newBestWin,
+        paerBestWave: newBestWave,
+        paerBestBank: newBestBank,
+        paerTotalRuns: newTotalRuns,
+      }).catch(() => {});
     }
 
     _showResultModal();
@@ -3858,7 +3878,7 @@ const Auth = {
     Coins.set(State.userData.coins ?? 0);
     ProfilePage.refresh();
     Daily.init();
-    WeeklyUpdates.render();
+    
     Router.init();
     Router.go("home");
     HomeMusic.play();
