@@ -1367,7 +1367,6 @@ a { color: var(--cyan); text-decoration: none; }
 ═══════════════════════════════════════════════════ */
 #overlay-capture.tier2-active .capture-topbar {
   border-bottom-color: var(--gold);
-  background: linear-gradient(180deg, rgba(255,215,0,.04) 0%, transparent 100%);
 }
 #overlay-capture.tier2-active .capture-title {
   color: var(--gold) !important;
