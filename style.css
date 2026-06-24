@@ -980,13 +980,9 @@ a { color: var(--cyan); text-decoration: none; }
   font-family: var(--font-display); font-size: .62rem; font-weight: 700;
   padding: 2px 8px; border-radius: 50px; margin-left: 8px; letter-spacing: .5px;
 }
-.collection-gallery {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
+
 .collection-empty {
-  grid-column: 1 / -1;
+  width: 100%;
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 36px 20px; color: var(--text-dim); font-family: var(--font-mono);
   font-size: .8rem; text-align: center;
@@ -1053,15 +1049,12 @@ a { color: var(--cyan); text-decoration: none; }
   .reveal-img-wrap { width: 130px; height: 130px; }
   .reveal-name { font-size: 1.3rem; }
 }
-@media (min-width: 400px) {
-  .collection-gallery { grid-template-columns: repeat(4, 1fr); }
-}
+
 @media (min-width: 640px) {
   .stat-grid { grid-template-columns: repeat(4, 1fr); }
   .games-grid { grid-template-columns: repeat(2, 1fr); }
   .pokemon-avatar-grid { grid-template-columns: repeat(6, 1fr); }
   .fg-cell { width: 68px; height: 68px; font-size: 1.8rem; }
-  .collection-gallery { grid-template-columns: repeat(6, 1fr); }
 }
 
 ::-webkit-scrollbar       { width: 5px; }
@@ -1785,7 +1778,10 @@ a { color: var(--cyan); text-decoration: none; }
   box-shadow: 0 0 18px rgba(255,80,0,0.45);
   animation: moneyFlyPulse .45s ease-in-out infinite alternate;
 }
-
+@keyframes moneyFlyPulse {
+  from { box-shadow: 0 0 10px rgba(255,80,0,0.3); }
+  to   { box-shadow: 0 0 28px rgba(255,80,0,0.7); }
+}
 /* 🔥 Fire — burnfreeze, aggressive red-orange, wave 10+ */
 /* 🧨 Firecracker — light hazard −₱50 */
 .paer-tile.firecracker {
@@ -2351,7 +2347,7 @@ a { color: var(--cyan); text-decoration: none; }
    COLLECTION — SECTION HEADERS & SUBGRID
 ═══════════════════════════════════════════════════ */
 .collection-section-header {
-  grid-column: 1 / -1;
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2362,7 +2358,6 @@ a { color: var(--cyan); text-decoration: none; }
   padding: 10px 4px 6px;
   margin-top: 6px;
   border-bottom: 1px solid var(--border);
-  
 }
 .collection-section-header:first-child { margin-top: 0; }
 
@@ -2390,21 +2385,74 @@ a { color: var(--cyan); text-decoration: none; }
 }
 
 /* Sub-grid inside each section — matches existing collection-gallery columns */
+/* Make collection-gallery a plain column (sections handle the grid) */
+.collection-gallery {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+}
+
+/* Paged section wrapper */
+.collection-paged-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+/* 3×3 grid — fixed, no responsive expansion */
+.collection-subgrid-paged {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+/* Pagination bar */
+.collection-pgbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 4px 0 2px;
+}
+.col-pg-btn {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--bg3);
+  border: 1.5px solid var(--border-hi);
+  color: var(--text-dim);
+  font-size: .85rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+  flex-shrink: 0;
+}
+.col-pg-btn:hover:not(:disabled) {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: var(--cyan-dim);
+}
+.col-pg-btn:disabled {
+  opacity: .3;
+  cursor: not-allowed;
+}
+.col-pg-label {
+  font-family: var(--font-mono);
+  font-size: .65rem;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  min-width: 48px;
+  text-align: center;
+}
+
+/* Keep old .collection-subgrid for any legacy reference */
 .collection-subgrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   width: 100%;
   margin-bottom: 4px;
-}
-@media (min-width: 400px) { .collection-subgrid { grid-template-columns: repeat(4, 1fr); } }
-@media (min-width: 640px) { .collection-subgrid { grid-template-columns: repeat(6, 1fr); } }
-
-/* Make collection-gallery a plain column now (sections handle the grid) */
-.collection-gallery {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 0 !important;
 }
 
 /* ── Hold hint label on card ── */
@@ -2458,17 +2506,16 @@ a { color: var(--cyan); text-decoration: none; }
   top: 5px; left: 5px;
   background: var(--gold);
   color: #000;
-  border-radius: 50%;
-  width: 18px; height: 18px;
+  border-radius: 10px;
+  width: auto;
+  height: 18px;
   display: flex; align-items: center; justify-content: center;
   font-size: .5rem;
   font-weight: 700;
   box-shadow: 0 0 8px rgba(255,215,0,0.6);
   z-index: 2;
   gap: 2px;
-  padding: 0 3px;
-  border-radius: 10px;
-  width: auto;
+  padding: 0 6px;
 }
 .collection-trade-badge.partial {
   background: rgba(255,215,0,0.85);
@@ -3068,14 +3115,6 @@ a { color: var(--cyan); text-decoration: none; }
   flex-direction: column;
   overflow: hidden;
 }
-.tp-modal-body {
-  flex: 1;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-  display: flex;
-  flex-direction: column;
-}
 
 .tp-modal-header {
   display: flex; align-items: flex-start;
@@ -3240,17 +3279,6 @@ a { color: var(--cyan); text-decoration: none; }
 }
 .tpbm-confirm-btn:disabled { opacity: .45; cursor: not-allowed; }
 
-/* ── Collection count badge ── */
-.collection-count-badge {
-  position: absolute;
-  bottom: 20px; right: 4px;
-  font-family: var(--font-display);
-  font-size: .42rem; font-weight: 700;
-  background: var(--magenta); color: #fff;
-  padding: 1px 5px; border-radius: 4px;
-  letter-spacing: .5px;
-  z-index: 3;
-}
 /* ── Trade & avatar modals above all overlays ── */
 #tp-sell-modal,
 #tp-buy-modal,
