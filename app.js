@@ -82,6 +82,56 @@ const DAILY_REWARD = 100;
 const MS_PER_DAY  = 86_400_000;
 const MS_PER_WEEK = 3 * MS_PER_DAY;
 
+// ═══════════════════════════════════════════════════
+//  WEEKLY UPDATES DATA
+// ═══════════════════════════════════════════════════
+const WEEKLY_UPDATES = [
+  {
+    version: "v1.4",
+    date: "June 25, 2026",
+    badge: "latest",
+    items: [
+      { icon: "bi-shield-fill-check", color: "var(--cyan)",    text: "Device back button now closes game overlays instead of exiting the app" },
+      { icon: "bi-collection-fill",   color: "var(--poke-red)",text: "Pokémon Collection gallery redesigned with paginated 3×3 grid" },
+      { icon: "bi-shop-window",       color: "var(--cyan)",    text: "Trading Plaza: all owned Pokémon are now always listable" },
+      { icon: "bi-gem",          color: "var(--gold)",    text: "Legendary free throw reset reduced from 7 days to 3 days" },
+    ],
+  },
+  {
+    version: "v1.3",
+    date: "June 18, 2026",
+    badge: null,
+    items: [
+      { icon: "bi-shop",              color: "var(--cyan)",    text: "Trading Plaza launched — buy and sell Pokémon with other trainers" },
+      { icon: "bi-trophy-fill",       color: "var(--gold)",    text: "Pokémon Masters leaderboard added inside Capture overlay" },
+      { icon: "bi-person-fill",       color: "var(--cyan)",    text: "Long-press any Pokémon in your collection to set it as your avatar" },
+      { icon: "bi-x-circle-fill",     color: "var(--magenta)", text: "Cancel your own Trading Plaza listings at any time" },
+    ],
+  },
+  {
+    version: "v1.2",
+    date: "June 11, 2026",
+    badge: null,
+    items: [
+      { icon: "bi-gem",               color: "var(--gold)",    text: "Capture Tier 2 added — hunt Legendary and Epic Pokémon every 3 days" },
+      { icon: "bi-music-note-beamed", color: "var(--paer)",    text: "Procedural background music added for all four games and the lobby" },
+      { icon: "bi-lightning-charge-fill", color: "var(--paer)", text: "Pæir a Pæra: power-ups ❄️ Freeze, ⭐ Star, 🌟 Superstar, 🧿 Orb added" },
+      { icon: "bi-arrow-repeat",      color: "var(--cyan)",    text: "Wave system added to Pæir a Pæra — board reshuffles when all earn tiles are revealed" },
+    ],
+  },
+  {
+    version: "v1.1",
+    date: "June 4, 2026",
+    badge: null,
+    items: [
+      { icon: "bi-controller",        color: "var(--paer)",    text: "Pæir a Pæra vault game launched — flip tiles, bank gems, cash out coins" },
+      { icon: "bi-collection-fill",   color: "var(--poke-red)",text: "Capture a Pokémon launched with full Gen 1–9 Pokédex" },
+      { icon: "bi-bar-chart-fill",    color: "var(--cyan)",    text: "Dashboard with leaderboard and recent activity added" },
+      { icon: "bi-coin",              color: "var(--gold)",    text: "Daily sign-in bonus of 100 coins introduced" },
+    ],
+  },
+];
+
 // ── History constants ──────────────────────────────
 const HISTORY_LIMIT = 5; // items shown & fetched from Firestore
 
@@ -531,6 +581,46 @@ render();
   };
   return { init:()=>render(), stop, render };
 })();
+
+// ═══════════════════════════════════════════════════
+//  WEEKLY UPDATES RENDERER
+// ═══════════════════════════════════════════════════
+const WeeklyUpdates = {
+  render() {
+    const wrap = $("weekly-updates-list");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    
+    WEEKLY_UPDATES.forEach((update, idx) => {
+      const isFirst = idx === 0;
+      
+      const card = document.createElement("div");
+      card.className = "wu-card" + (isFirst ? " wu-card-latest" : "");
+      
+      card.innerHTML = `
+        <div class="wu-card-header">
+          <div class="wu-version-wrap">
+            <span class="wu-version">${update.version}</span>
+            ${update.badge === "latest"
+              ? `<span class="wu-badge-latest"><i class="bi bi-star-fill"></i> LATEST</span>`
+              : ""}
+          </div>
+          <span class="wu-date"><i class="bi bi-calendar3"></i> ${update.date}</span>
+        </div>
+        <ul class="wu-items">
+          ${update.items.map(item => `
+            <li class="wu-item">
+              <span class="wu-item-icon" style="color:${item.color}">
+                <i class="bi ${item.icon}"></i>
+              </span>
+              <span class="wu-item-text">${item.text}</span>
+            </li>`).join("")}
+        </ul>`;
+      
+      wrap.appendChild(card);
+    });
+  },
+};
 
 // ═══════════════════════════════════════════════════
 //  HISTORY MANAGER — intercepts device/browser back
@@ -3768,6 +3858,7 @@ const Auth = {
     Coins.set(State.userData.coins ?? 0);
     ProfilePage.refresh();
     Daily.init();
+    WeeklyUpdates.render();
     Router.init();
     Router.go("home");
     HomeMusic.play();
