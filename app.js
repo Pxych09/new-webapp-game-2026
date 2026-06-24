@@ -94,7 +94,7 @@ const WEEKLY_UPDATES = [
       { icon: "bi-shield-fill-check", color: "var(--cyan)",    text: "Device back button now closes game overlays instead of exiting the app" },
       { icon: "bi-collection-fill",   color: "var(--poke-red)",text: "Pokémon Collection gallery redesigned with paginated 3×3 grid" },
       { icon: "bi-shop-window",       color: "var(--cyan)",    text: "Trading Plaza: all owned Pokémon are now always listable" },
-      { icon: "bi-gem-fill",          color: "var(--gold)",    text: "Legendary free throw reset reduced from 7 days to 3 days" },
+      { icon: "bi-gem",          color: "var(--gold)",    text: "Legendary free throw reset reduced from 7 days to 3 days" },
       { icon: "bi-layers-fill", color: "var(--paer)", text: "Dashboard now tracks Pæir a Pæra vault runs, best wave reached, and best bank" },
     ],
   },
@@ -3878,7 +3878,6 @@ const Auth = {
     Coins.set(State.userData.coins ?? 0);
     ProfilePage.refresh();
     Daily.init();
-    
     Router.init();
     Router.go("home");
     HomeMusic.play();
@@ -3925,6 +3924,7 @@ function _toggleMute(player, iconId) {
 const boot = () => {
   Screens.show("screen-splash");
   HistoryManager.init();
+  WeeklyUpdates.render();
   AuthScreen.init();
   DashPage.bindTabs();
   ProfilePage.init();
