@@ -737,120 +737,151 @@ const ProfilePage = {
     this._renderCollection(d.pokemonCollection || []);
   },
   _renderCollection(collection) {
-    const wrap = $("collection-gallery"); if (!wrap) return;
-    const countEl = $("collection-count"); if (countEl) countEl.textContent = collection.length;
-    if (!collection.length) {
-      wrap.innerHTML = `<div class="collection-empty"><i class="bi bi-collection"></i><p>No Pokémon captured yet.</p><p class="collection-empty-sub">Head to Games and try Capture a Pokémon!</p></div>`;
-      return;
-    }
+    const wrap    = $("collection-gallery"); if (!wrap) return;
+    const countEl = $("collection-count");   if (countEl) countEl.textContent = collection.length;
+
     wrap.innerHTML = "";
 
-    // Split into legendary and common groups, each sorted by id
-    const legends = [...collection].filter(p => p.tier==="t2" || TIER2_IDS.has(p.id)).sort((a,b)=>a.id-b.id);
-    const commons = [...collection].filter(p => p.tier!=="t2" && !TIER2_IDS.has(p.id)).sort((a,b)=>a.id-b.id);
+    if (!collection.length) {
+      wrap.innerHTML = `
+        <div class="collection-empty">
+          <i class="bi bi-collection"></i>
+          <p>No Pokémon captured yet.</p>
+          <p class="collection-empty-sub">Head to Games and try Capture a Pokémon!</p>
+        </div>`;
+      return;
+    }
 
     const currentAvatarId = parseAvatar(State.userData?.avatar)?.id;
 
-const _makeCard = (p, isLegend) => {
-  const { id, name } = p;
-  const isActive = id === currentAvatarId;
-  const cardCount = p.count || 1;
-  const reserved = TradinPlaza.getReservedQty(id);
-  const available = Math.max(0, cardCount - reserved);
-  const isFullyListed = reserved > 0 && available === 0;
-  const isPartialListed = reserved > 0 && available > 0;
-  
-  const card = document.createElement("div");
-  card.className = "collection-card" +
-    (isLegend ? " legendary-card" : "") +
-    (isActive ? " avatar-active" : "") +
-    (isFullyListed ? " in-trade-full" : "") +
-    (isPartialListed ? " in-trade-partial" : "");
-  
-  // cardCount = total owned, available = not listed
-  // Only show ×count badge if total > 1
-  card.innerHTML = `
+    // Split
+    const legends = [...collection]
+      .filter(p => p.tier === "t2" || TIER2_IDS.has(p.id))
+      .sort((a, b) => a.id - b.id);
+    const commons = [...collection]
+      .filter(p => p.tier !== "t2" && !TIER2_IDS.has(p.id))
+      .sort((a, b) => a.id - b.id);
+
+    // ── Card builder ──────────────────────────────────
+    const makeCard = (p, isLegend) => {
+      const { id, name } = p;
+      const isActive    = id === currentAvatarId;
+      const cardCount   = p.count || 1;
+      const reserved    = TradinPlaza.getReservedQty(id);
+      const available   = Math.max(0, cardCount - reserved);
+      const fullyListed = reserved > 0 && available === 0;
+      const partListed  = reserved > 0 && available > 0;
+
+      const card = document.createElement("div");
+      card.className = "collection-card"
+        + (isLegend    ? " legendary-card"   : "")
+        + (isActive    ? " avatar-active"    : "")
+        + (fullyListed ? " in-trade-full"    : "")
+        + (partListed  ? " in-trade-partial" : "");
+
+      card.innerHTML = `
         <div class="collection-card-img-wrap">
           <img src="${POKE_ARTWORK_URL(id)}" alt="${name}" loading="lazy"
             class="collection-card-img"
             onerror="this.src='${POKE_SPRITE_URL(id)}'"
             draggable="false" />
         </div>
-        ${isLegend        ? `<span class="collection-legend-badge"><i class="bi bi-gem-fill"></i></span>` : ""}
-        ${isActive        ? `<span class="collection-avatar-badge"><i class="bi bi-person-fill"></i></span>` : ""}
-        ${isFullyListed   ? `<span class="collection-trade-badge"><i class="bi bi-shop-window"></i></span>` : ""}
-        ${isPartialListed ? `<span class="collection-trade-badge partial"><i class="bi bi-shop-window"></i> ${reserved}</span>` : ""}
-        ${cardCount > 1
-          ? `<span class="collection-count-badge">×${cardCount}${reserved > 0 ? ` <span style="opacity:.6;font-size:.8em">(${available} free)</span>` : ""}</span>`
-          : ""}
+        ${isLegend    ? `<span class="collection-legend-badge"><i class="bi bi-gem-fill"></i></span>` : ""}
+        ${isActive    ? `<span class="collection-avatar-badge"><i class="bi bi-person-fill"></i></span>` : ""}
+        ${fullyListed ? `<span class="collection-trade-badge"><i class="bi bi-shop-window"></i></span>` : ""}
+        ${partListed  ? `<span class="collection-trade-badge partial"><i class="bi bi-shop-window"></i> ${reserved}</span>` : ""}
+        ${cardCount > 1 ? `<span class="collection-count-badge">×${cardCount}</span>` : ""}
         <span class="collection-card-name">${name}</span>
-        <span class="collection-card-id">#${String(id).padStart(3,"0")}</span>
-        ${isFullyListed   ? `<span class="collection-trade-label">IN TRADING PLAZA</span>` : ""}
+        <span class="collection-card-id">#${String(id).padStart(3, "0")}</span>
+        ${fullyListed ? `<span class="collection-trade-label">IN TRADING PLAZA</span>` : ""}
         <span class="collection-hold-hint">Hold to set avatar</span>`;
-  
-  // ── Long-press / hold — works on the ENTIRE card ──────────────
-  // Prevent native text-selection and image-drag on all children
-  // so the hold gesture fires regardless of where the finger lands.
-  let holdTimer = null;
-  let didFire = false;
-  
-  const startHold = (e) => {
-    didFire = false;
-    // Prevent the browser from selecting text or showing a copy menu
-    e.preventDefault();
-    holdTimer = setTimeout(() => {
-      didFire = true;
-      this._promptAvatar(id, name);
-    }, 600);
-  };
-  
-  const cancelHold = () => {
-    clearTimeout(holdTimer);
-    holdTimer = null;
-  };
-  
-  // Mouse
-  card.addEventListener("mousedown", startHold);
-  card.addEventListener("mouseup", cancelHold);
-  card.addEventListener("mouseleave", cancelHold);
-  
-  // Touch — preventDefault on touchstart blocks the long-press
-  // copy menu on mobile browsers
-  card.addEventListener("touchstart", startHold, { passive: false });
-  card.addEventListener("touchend", cancelHold);
-  card.addEventListener("touchcancel", cancelHold);
-  card.addEventListener("touchmove", cancelHold); // dragging = cancel
-  
-  // Block context menu (right-click / long-tap copy menu)
-  card.addEventListener("contextmenu", (e) => e.preventDefault());
-  
-  return card;
-};
-    // ── Legendary / Epic section ──
-    if (legends.length) {
-      const legendHeader = document.createElement("div");
-      legendHeader.className = "collection-section-header legendary-header";
-      legendHeader.innerHTML = `<i class="bi bi-gem-fill"></i> LEGENDARY & EPIC <span class="csh-count">${legends.length}</span>`;
-      wrap.appendChild(legendHeader);
 
-      const legendGrid = document.createElement("div");
-      legendGrid.className = "collection-subgrid";
-      legends.forEach(p => legendGrid.appendChild(_makeCard(p, true)));
-      wrap.appendChild(legendGrid);
-    }
+      // Long-press — whole card, no text-selection interference
+      let holdTimer = null;
+      let didFire   = false;
+      const startHold = (e) => {
+        didFire = false;
+        e.preventDefault();
+        holdTimer = setTimeout(() => { didFire = true; this._promptAvatar(id, name); }, 600);
+      };
+      const cancelHold = () => { clearTimeout(holdTimer); holdTimer = null; };
+      card.addEventListener("mousedown",   startHold);
+      card.addEventListener("mouseup",     cancelHold);
+      card.addEventListener("mouseleave",  cancelHold);
+      card.addEventListener("touchstart",  startHold, { passive: false });
+      card.addEventListener("touchend",    cancelHold);
+      card.addEventListener("touchcancel", cancelHold);
+      card.addEventListener("touchmove",   cancelHold);
+      card.addEventListener("contextmenu", (e) => e.preventDefault());
+      return card;
+    };
 
-    // ── Common section ──
-    if (commons.length) {
-      const commonHeader = document.createElement("div");
-      commonHeader.className = "collection-section-header common-header";
-      commonHeader.innerHTML = `<i class="bi bi-collection-fill"></i> COMMON <span class="csh-count">${commons.length}</span>`;
-      wrap.appendChild(commonHeader);
+    // ── Paginated section builder ─────────────────────
+    // PER_PAGE = 9 (3×3)
+    const PER_PAGE = 9;
 
-      const commonGrid = document.createElement("div");
-      commonGrid.className = "collection-subgrid";
-      commons.forEach(p => commonGrid.appendChild(_makeCard(p, false)));
-      wrap.appendChild(commonGrid);
-    }
+    const makeSection = (items, isLegend, sectionId) => {
+      if (!items.length) return;
+
+      let currentPage = 0;
+      const totalPages = () => Math.ceil(items.length / PER_PAGE);
+
+      // Header
+      const header = document.createElement("div");
+      header.className = "collection-section-header " + (isLegend ? "legendary-header" : "common-header");
+      header.innerHTML = `
+        <i class="bi bi-${isLegend ? "gem-fill" : "collection-fill"}"></i>
+        ${isLegend ? "LEGENDARY & EPIC" : "COMMON"}
+        <span class="csh-count" id="${sectionId}-count">${items.length}</span>`;
+      wrap.appendChild(header);
+
+      // Grid container
+      const gridWrap = document.createElement("div");
+      gridWrap.className = "collection-paged-section";
+      gridWrap.id = sectionId;
+      wrap.appendChild(gridWrap);
+
+      const renderPage = () => {
+        gridWrap.innerHTML = "";
+
+        // 3×3 grid
+        const grid = document.createElement("div");
+        grid.className = "collection-subgrid-paged";
+        const start = currentPage * PER_PAGE;
+        const slice = items.slice(start, start + PER_PAGE);
+        slice.forEach(p => grid.appendChild(makeCard(p, isLegend)));
+        gridWrap.appendChild(grid);
+
+        // Pagination controls — only if more than one page
+        if (totalPages() > 1) {
+          const pgBar = document.createElement("div");
+          pgBar.className = "collection-pgbar";
+          pgBar.innerHTML = `
+            <button class="col-pg-btn" id="${sectionId}-prev" ${currentPage === 0 ? "disabled" : ""}>
+              <i class="bi bi-chevron-left"></i>
+            </button>
+            <span class="col-pg-label">
+              ${currentPage + 1} / ${totalPages()}
+            </span>
+            <button class="col-pg-btn" id="${sectionId}-next" ${currentPage >= totalPages() - 1 ? "disabled" : ""}>
+              <i class="bi bi-chevron-right"></i>
+            </button>`;
+          gridWrap.appendChild(pgBar);
+
+          pgBar.querySelector(`#${sectionId}-prev`).addEventListener("click", () => {
+            if (currentPage > 0) { currentPage--; renderPage(); }
+          });
+          pgBar.querySelector(`#${sectionId}-next`).addEventListener("click", () => {
+            if (currentPage < totalPages() - 1) { currentPage++; renderPage(); }
+          });
+        }
+      };
+
+      renderPage();
+    };
+
+    if (legends.length) makeSection(legends, true,  "col-section-legend");
+    if (commons.length) makeSection(commons, false, "col-section-common");
   },
 
   _pendingAvatar: null,   // { id, name } — set when modal opens, read on confirm
@@ -1908,59 +1939,61 @@ const TradinPlaza = (() => {
     setTimeout(() => modal.classList.add("hidden"), 320);
   }
 
-function _renderSellGallery(col) {
+  function _renderSellGallery(col) {
     const grid = $("tp-sell-gallery"); if (!grid) return;
     grid.innerHTML = "";
-    [...col].sort((a,b)=>a.id-b.id).forEach(p => {
-      const isLegend   = p.tier==="t2" || TIER2_IDS.has(p.id);
-      const totalCount = p.count || 1;
-      const available  = _availableQty(p.id);
-      const reserved   = _reservedQty(p.id);
-      const isLocked   = available === 0;
+
+    if (!col.length) {
+      grid.innerHTML = `<p class="tp-sell-pick-hint">No Pokémon in your collection yet.</p>`;
+      return;
+    }
+
+    [...col].sort((a, b) => a.id - b.id).forEach(p => {
+      const isLegend  = p.tier === "t2" || TIER2_IDS.has(p.id);
+      const cardCount = p.count || 1;
+      const reserved  = _reservedQty(p.id);
 
       const card = document.createElement("button");
-      card.className = "tp-sell-poke"
-        + (_selectedPoke?.id===p.id ? " selected" : "")
-        + (isLocked ? " locked" : "");
-      card.disabled = isLocked;
+      card.className = "tp-sell-poke" + (_selectedPoke?.id === p.id ? " selected" : "");
+
       card.innerHTML = `
         <img src="${POKE_ARTWORK_URL(p.id)}" alt="${p.name}"
           onerror="this.src='${POKE_SPRITE_URL(p.id)}'"
           loading="lazy" class="tp-sell-img" />
-        ${isLegend  ? `<span class="tp-sell-gem"><i class="bi bi-gem-fill"></i></span>` : ""}
-        ${isLocked  ? `<span class="tp-sell-count tp-sell-locked-badge"><i class="bi bi-shop"></i></span>`
-                    : totalCount > 1 ? `<span class="tp-sell-count">×${available}</span>` : ""}
-        <span class="tp-sell-name">${p.name}</span>
-        ${reserved > 0 ? `<span class="tp-sell-reserved-label">Listed: ${reserved}</span>` : ""}`;
+        ${isLegend   ? `<span class="tp-sell-gem"><i class="bi bi-gem-fill"></i></span>` : ""}
+        ${cardCount > 1 ? `<span class="tp-sell-count">×${cardCount}</span>` : ""}
+        ${reserved > 0  ? `<span class="tp-sell-reserved-label">Listed: ${reserved}</span>` : ""}
+        <span class="tp-sell-name">${p.name}</span>`;
 
-      if (!isLocked) {
-        card.addEventListener("click", () => {
-          // Pass available count so qty controls respect it
-          _selectedPoke = { ...p, count: available };
-          _sellQty = 1;
-          _renderSellGallery(col);
-          _renderSellControls();
-        });
-      }
+      card.addEventListener("click", () => {
+        // Pass total count — user can sell any quantity they own
+        _selectedPoke = { ...p, count: cardCount };
+        _sellQty = 1;
+        _renderSellGallery(col);
+        _renderSellControls();
+      });
+
       grid.appendChild(card);
     });
   }
+  
   function _renderSellControls() {
     const wrap = $("tp-sell-controls"); if (!wrap) return;
     if (!_selectedPoke) {
       wrap.innerHTML = `<p class="tp-sell-pick-hint">← Select a Pokémon to list</p>`;
       return;
     }
-    const count    = _selectedPoke.count || 1;
-    const maxQty   = count;
-    const total    = _sellPrice * _sellQty;
+
+    const maxQty = _selectedPoke.count || 1;  // total owned — always listable
+    const total  = _sellPrice * _sellQty;
+
     wrap.innerHTML = `
       <div class="tp-sell-selected">
         <img src="${POKE_ARTWORK_URL(_selectedPoke.id)}" class="tp-sell-sel-img"
           onerror="this.src='${POKE_SPRITE_URL(_selectedPoke.id)}'" />
         <div>
           <p class="tp-sell-sel-name">${_selectedPoke.name}</p>
-          <p class="tp-sell-sel-own">You own: <strong>${count}</strong></p>
+          <p class="tp-sell-sel-own">You own: <strong>${maxQty}</strong></p>
         </div>
       </div>
       <div class="tp-sell-row">
@@ -1971,7 +2004,7 @@ function _renderSellGallery(col) {
             value="${_sellPrice}" class="tp-price-input" />
         </div>
       </div>
-      ${count > 1 ? `
+      ${maxQty > 1 ? `
       <div class="tp-sell-row">
         <label class="tp-sell-label">QUANTITY</label>
         <div class="tp-qty-wrap">
@@ -1988,24 +2021,21 @@ function _renderSellGallery(col) {
         <i class="bi bi-shop"></i> LIST IN MERCHANT
       </button>`;
 
-    // Price input
     $("tp-price-input")?.addEventListener("input", e => {
-      _sellPrice = Math.max(100, parseInt(e.target.value)||100);
+      _sellPrice = Math.max(100, parseInt(e.target.value) || 100);
       _updateTotal();
     });
     $("tp-price-input")?.addEventListener("blur", e => {
       if (parseInt(e.target.value) < 100) e.target.value = 100;
-      _sellPrice = Math.max(100, parseInt(e.target.value)||100);
+      _sellPrice = Math.max(100, parseInt(e.target.value) || 100);
       _updateTotal();
     });
-    // Qty buttons
     $("tp-qty-minus")?.addEventListener("click", () => {
       if (_sellQty > 1) { _sellQty--; _updateQtyDisplay(); }
     });
     $("tp-qty-plus")?.addEventListener("click", () => {
       if (_sellQty < maxQty) { _sellQty++; _updateQtyDisplay(); }
     });
-    // List button
     $("tp-confirm-list")?.addEventListener("click", _submitListing);
   }
 
@@ -2022,9 +2052,10 @@ async function _submitListing() {
     if (!_selectedPoke) return;
     if (_sellPrice < 100) { Toast.show("Minimum price is 100 coins!", "loss"); return; }
 
-    // Block if no available quantity remains
-    if (_availableQty(_selectedPoke.id) < _sellQty) {
-      Toast.show("Not enough available Pokémon — check your active listings!", "loss");
+    // Validate quantity against total owned
+    const totalOwned = (_selectedPoke.count || 1);
+    if (_sellQty < 1 || _sellQty > totalOwned) {
+      Toast.show("Invalid quantity.", "loss");
       return;
     }
 
